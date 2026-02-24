@@ -628,23 +628,46 @@ function ChromaticAberrationControls({
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
 }) {
+  const offsetStart = eff.offsetStart ?? (eff as { offset?: number }).offset ?? 0.005
+  const offsetEnd = eff.offsetEnd ?? (eff as { offset?: number }).offset ?? 0.005
   return (
     <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect}>
       <div className="space-y-2">
         <label className="block text-[11px] text-white/50">
-          Offset (RGB shift)
+          Offset (RGB shift) — Start
           <input
             type="range"
             min={0}
             max={0.02}
             step={0.001}
-            value={eff.offset}
+            value={offsetStart}
             onChange={(e) =>
-              setEffect(sceneIndex, effectIndex, { offset: parseFloat(e.target.value) })
+              setEffect(sceneIndex, effectIndex, {
+                offsetStart: parseFloat(e.target.value),
+                offsetEnd: eff.offsetEnd ?? offsetEnd,
+              })
             }
             className="w-full mt-0.5"
           />
-          <span className="text-[10px] text-white/40">{(eff.offset * 1000).toFixed(1)}</span>
+          <span className="text-[10px] text-white/40">{(offsetStart * 1000).toFixed(1)}</span>
+        </label>
+        <label className="block text-[11px] text-white/50">
+          Offset — End
+          <input
+            type="range"
+            min={0}
+            max={0.02}
+            step={0.001}
+            value={offsetEnd}
+            onChange={(e) =>
+              setEffect(sceneIndex, effectIndex, {
+                offsetStart: eff.offsetStart ?? offsetStart,
+                offsetEnd: parseFloat(e.target.value),
+              })
+            }
+            className="w-full mt-0.5"
+          />
+          <span className="text-[10px] text-white/40">{(offsetEnd * 1000).toFixed(1)}</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -673,23 +696,48 @@ function LensDistortionControls({
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
 }) {
+  const distortionStart = eff.distortionStart ?? (eff as { distortion?: number }).distortion ?? 0.05
+  const distortionEnd = eff.distortionEnd ?? (eff as { distortion?: number }).distortion ?? 0.05
   return (
     <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect}>
-      <label className="block text-[11px] text-white/50">
-        Distortion (barrel / pincushion)
-        <input
-          type="range"
-          min={-0.2}
-          max={0.2}
-          step={0.01}
-          value={eff.distortion}
-          onChange={(e) =>
-            setEffect(sceneIndex, effectIndex, { distortion: parseFloat(e.target.value) })
-          }
-          className="w-full mt-0.5"
-        />
-        <span className="text-[10px] text-white/40">{eff.distortion.toFixed(2)}</span>
-      </label>
+      <div className="space-y-2">
+        <label className="block text-[11px] text-white/50">
+          Distortion (barrel / pincushion) — Start
+          <input
+            type="range"
+            min={-0.2}
+            max={0.2}
+            step={0.01}
+            value={distortionStart}
+            onChange={(e) =>
+              setEffect(sceneIndex, effectIndex, {
+                distortionStart: parseFloat(e.target.value),
+                distortionEnd: eff.distortionEnd ?? distortionEnd,
+              })
+            }
+            className="w-full mt-0.5"
+          />
+          <span className="text-[10px] text-white/40">{distortionStart.toFixed(2)}</span>
+        </label>
+        <label className="block text-[11px] text-white/50">
+          Distortion — End
+          <input
+            type="range"
+            min={-0.2}
+            max={0.2}
+            step={0.01}
+            value={distortionEnd}
+            onChange={(e) =>
+              setEffect(sceneIndex, effectIndex, {
+                distortionStart: eff.distortionStart ?? distortionStart,
+                distortionEnd: parseFloat(e.target.value),
+              })
+            }
+            className="w-full mt-0.5"
+          />
+          <span className="text-[10px] text-white/40">{distortionEnd.toFixed(2)}</span>
+        </label>
+      </div>
     </ToggleControl>
   )
 }

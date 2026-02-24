@@ -80,7 +80,9 @@ function buildDefaultPresets(): Preset[] {
     (sc: Scene) => ({
       ...sc,
       effects: sc.effects.map((e) =>
-        e.type === 'chromaticAberration' ? { ...e, enabled, offset } : e
+        e.type === 'chromaticAberration'
+          ? { ...e, enabled, offsetStart: offset, offsetEnd: offset }
+          : e
       ),
     })
 

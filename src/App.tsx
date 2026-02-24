@@ -142,6 +142,28 @@ function SpacebarPlayback() {
   return null
 }
 
+function UndoRedoKeys() {
+  const undo = useStore((s) => s.undo)
+  const redo = useStore((s) => s.redo)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+      const isMac = navigator.platform?.toLowerCase().startsWith('mac')
+      const mod = isMac ? e.metaKey : e.ctrlKey
+      if (!mod || e.code !== 'KeyZ') return
+      e.preventDefault()
+      if (e.shiftKey) redo()
+      else undo()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo, redo])
+
+  return null
+}
+
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null)
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
@@ -186,9 +208,11 @@ export default function App() {
       )}
       <PlaybackLoop />
       <SpacebarPlayback />
+      <UndoRedoKeys />
       <header className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
         <h1 className="text-lg font-semibold tracking-tight">VVideo</h1>
         <div className="flex items-center gap-2">
+          <UndoRedoButtons />
           <ResetProjectButton />
           <ExportButton />
         </div>
@@ -244,6 +268,7 @@ function CameraKeyframeButtons() {
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const flyoverEditCamera = useStore((s) => s.flyoverEditCamera)
   const setFlyoverKeyframes = useStore((s) => s.setFlyoverKeyframes)
+  const setFlyoverJumpToStart = useStore((s) => s.setFlyoverJumpToStart)
 
   if (!scene?.flyover) return null
   const { start, end } = scene.flyover
@@ -298,7 +323,7 @@ function CameraKeyframeButtons() {
       >
         <span
           className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
-          style={{ backgroundColor: atStartPosition ? accent : 'rgba(255,255,255,0.4)' }}
+          style={{ backgroundColor: hasStart ? accent : 'rgba(255,255,255,0.4)' }}
         />
         {hasStart ? 'Start' : 'Set start'}
       </button>
@@ -314,9 +339,48 @@ function CameraKeyframeButtons() {
       >
         <span
           className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
-          style={{ backgroundColor: atEndPosition ? accent : 'rgba(255,255,255,0.4)' }}
+          style={{ backgroundColor: hasEnd ? accent : 'rgba(255,255,255,0.4)' }}
         />
         {hasEnd ? 'End' : 'Set end'}
+      </button>
+      <button
+        type="button"
+        onClick={() => setFlyoverJumpToStart(true)}
+        disabled={!flyoverEditMode || !hasStart}
+        title="Move camera to start keyframe position"
+        className="shrink-0 rounded-full border-2 border-transparent py-2 px-4 text-sm font-medium text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed bg-white/10 whitespace-nowrap"
+      >
+        Jump to start
+      </button>
+    </div>
+  )
+}
+
+function UndoRedoButtons() {
+  const undo = useStore((s) => s.undo)
+  const redo = useStore((s) => s.redo)
+  const canUndo = useStore((s) => (s.historyPast?.length ?? 0) > 0)
+  const canRedo = useStore((s) => (s.historyFuture?.length ?? 0) > 0)
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={undo}
+        disabled={!canUndo}
+        className="px-2.5 py-1.5 rounded-md text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Undo (Ctrl+Z)"
+      >
+        Undo
+      </button>
+      <button
+        type="button"
+        onClick={redo}
+        disabled={!canRedo}
+        className="px-2.5 py-1.5 rounded-md text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Redo (Ctrl+Shift+Z)"
+      >
+        Redo
       </button>
     </div>
   )
@@ -350,6 +414,11 @@ const EXPORT_BITRATES = [
   { label: '12 Mbps', value: 12_000_000 },
   { label: '16 Mbps', value: 16_000_000 },
 ] as const
+const EXPORT_RESOLUTIONS = [
+  { label: '480p', value: 480 },
+  { label: '720p', value: 720 },
+  { label: '1080p', value: 1080 },
+] as const
 
 function ExportButton() {
   const isExporting = useStore((s) => s.isExporting)
@@ -357,8 +426,10 @@ function ExportButton() {
   const [framerate, setFramerate] = useState(30)
   const [bitrate, setBitrate] = useState(8_000_000)
   const [content, setContent] = useState<'full' | 'plane-only'>('full')
+  const [resolution, setResolution] = useState(720)
   const setExporting = useStore((s) => s.setExporting)
   const setExportRenderMode = useStore((s) => s.setExportRenderMode)
+  const setExportHeight = useStore((s) => s.setExportHeight)
   const setPlaying = useStore((s) => s.setPlaying)
   const project = useStore((s) => s.project)
   const setCurrentTime = useStore((s) => s.setCurrentTime)
@@ -367,6 +438,7 @@ function ExportButton() {
 
   const runExport = async () => {
     setExportRenderMode(content)
+    setExportHeight(resolution)
     setExporting(true)
     setExportDialogOpen(false)
     setCurrentSceneIndex(0)
@@ -388,6 +460,7 @@ function ExportButton() {
     const recorder = new MediaRecorder(stream, {
       mimeType: mime,
       videoBitsPerSecond: bitrate,
+      audioBitsPerSecond: 0,
     })
     const chunks: Blob[] = []
     recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
@@ -425,6 +498,8 @@ function ExportButton() {
           setFramerate={setFramerate}
           bitrate={bitrate}
           setBitrate={setBitrate}
+          resolution={resolution}
+          setResolution={setResolution}
           content={content}
           setContent={setContent}
           hasPlaneVideo={!!planeVideoUrl}
@@ -441,6 +516,8 @@ function ExportDialog({
   setFramerate,
   bitrate,
   setBitrate,
+  resolution,
+  setResolution,
   content,
   setContent,
   hasPlaneVideo,
@@ -451,6 +528,8 @@ function ExportDialog({
   setFramerate: (n: number) => void
   bitrate: number
   setBitrate: (n: number) => void
+  resolution: number
+  setResolution: (n: number) => void
   content: 'full' | 'plane-only'
   setContent: (c: 'full' | 'plane-only') => void
   hasPlaneVideo: boolean
@@ -462,6 +541,24 @@ function ExportDialog({
       <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-5 shadow-xl">
         <h2 className="text-lg font-semibold text-white mb-4">Export options</h2>
         <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
+              Resolution
+            </label>
+            <div className="flex gap-2">
+              {EXPORT_RESOLUTIONS.map(({ label, value }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setResolution(value)}
+                  className={`flex-1 px-2 py-2 rounded text-sm font-medium ${resolution === value ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'
+                    }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
               Framerate
@@ -518,8 +615,8 @@ function ExportDialog({
               </label>
               <label
                 className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${hasPlaneVideo
-                    ? 'bg-white/5 border-white/10 hover:bg-white/10'
-                    : 'border-white/5 bg-white/5 opacity-60 cursor-not-allowed'
+                  ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                  : 'border-white/5 bg-white/5 opacity-60 cursor-not-allowed'
                   }`}
               >
                 <input

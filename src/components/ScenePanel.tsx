@@ -44,11 +44,10 @@ export function ScenePanel() {
   }
 
   return (
-    <section>
-      <h2 className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-2">
-        Aspect ratio
-      </h2>
-      <div className="flex gap-2 mb-4">
+    <section className="space-y-4">
+      <div>
+        <span className="text-xs font-medium text-white/50 mb-1.5 block">Aspect ratio</span>
+        <div className="flex gap-2">
         <button
           type="button"
           onClick={() => setProjectAspectRatio([16, 9])}
@@ -65,17 +64,14 @@ export function ScenePanel() {
         >
           9×16
         </button>
+        </div>
       </div>
 
-      <h2 className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-2">
-        Video (shared)
-      </h2>
-      <p className="text-xs text-white/50 mb-2">
-        One background and one plane video for the whole project. Each scene sets its own cut (trim).
-      </p>
-      <div className="space-y-3 mb-4">
+      <div>
+        <span className="text-xs font-medium text-white/50 mb-1.5 block">Videos</span>
+        <div className="space-y-3">
         <div>
-          <span className="text-xs text-white/60 block mb-1">Background video</span>
+          <span className="text-xs text-white/60 block mb-1">Background</span>
           {project.backgroundVideoUrl ? (
             <div className="space-y-1.5">
               <VideoThumbnail
@@ -100,7 +96,7 @@ export function ScenePanel() {
           )}
         </div>
         <div>
-          <span className="text-xs text-white/60 block mb-1">Video on plane</span>
+          <span className="text-xs text-white/60 block mb-1">Panel</span>
           {project.planeVideoUrl ? (
             <div className="space-y-1.5">
               <VideoThumbnail
@@ -124,11 +120,8 @@ export function ScenePanel() {
             />
           )}
         </div>
+        </div>
       </div>
-
-      <p className="text-xs text-white/50 mb-2">
-        Select a scene in the timeline to edit it below.
-      </p>
 
       {scene && (
         <>
@@ -147,17 +140,17 @@ export function ScenePanel() {
             {project.backgroundVideoUrl && (
               <div className="pl-2 border-l-2 border-white/10 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-white/50">Background cut (this scene)</span>
+                  <span className="text-xs text-white/50">Background trim</span>
                   <button
                     type="button"
                     onClick={() => setTrimEditor('background')}
                     className="text-xs px-2 py-1 rounded bg-white/10 text-white/80 hover:bg-white/20 shrink-0"
                   >
-                    Edit trim…
+                    Edit
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2 items-center">
-                  <span className="text-xs text-white/50">Playback:</span>
+                  <span className="text-xs text-white/50">Playback</span>
                   <button
                     type="button"
                     onClick={() => updateScene(currentSceneIndex, { backgroundVideoPlaybackMode: 'normal' })}
@@ -249,17 +242,17 @@ export function ScenePanel() {
             {project.planeVideoUrl && (
               <div className="pl-2 border-l-2 border-white/10 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-white/50">Plane cut (this scene)</span>
+                  <span className="text-xs text-white/50">Panel trim</span>
                   <button
                     type="button"
                     onClick={() => setTrimEditor('plane')}
                     className="text-xs px-2 py-1 rounded bg-white/10 text-white/80 hover:bg-white/20 shrink-0"
                   >
-                    Edit trim…
+                    Edit
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2 items-center">
-                  <span className="text-xs text-white/50">Playback:</span>
+                  <span className="text-xs text-white/50">Playback</span>
                   <button
                     type="button"
                     onClick={() => updateScene(currentSceneIndex, { planeVideoPlaybackMode: 'normal' })}
@@ -350,7 +343,7 @@ export function ScenePanel() {
             )}
 
             <label className="block">
-              <span className="text-xs text-white/60 block mb-1">Duration (sec)</span>
+              <span className="text-xs text-white/60 block mb-1">Duration (s)</span>
               <input
                 type="number"
                 min={0.5}
@@ -370,7 +363,7 @@ export function ScenePanel() {
 
       {trimEditor === 'background' && scene && project.backgroundVideoUrl && (
         <TrimEditorModal
-          title="Background video trim (this scene)"
+          title="Background trim"
           videoUrl={project.backgroundVideoUrl}
           initialTrim={scene.backgroundTrim}
           sceneDuration={scene.durationSeconds}
@@ -381,7 +374,7 @@ export function ScenePanel() {
       )}
       {trimEditor === 'plane' && scene && project.planeVideoUrl && (
         <TrimEditorModal
-          title="Plane video trim (this scene)"
+          title="Panel trim"
           videoUrl={project.planeVideoUrl}
           initialTrim={scene.planeTrim}
           sceneDuration={scene.durationSeconds}

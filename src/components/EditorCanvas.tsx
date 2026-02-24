@@ -63,6 +63,7 @@ function BackgroundVideo({
     video.crossOrigin = 'anonymous'
     video.loop = true
     video.muted = true
+    video.volume = 0
     video.playsInline = true
     video.play().catch(() => { })
     videoRef.current = video
@@ -147,6 +148,7 @@ function PlaneVideo({
     video.crossOrigin = 'anonymous'
     video.loop = true
     video.muted = true
+    video.volume = 0
     video.playsInline = true
     const onLoadedMetadata = () => {
       const w = video.videoWidth || 16
@@ -310,12 +312,33 @@ function FlyoverEditSync() {
   const { camera } = useThree()
   const scene = useStore((s) => s.project.scenes[s.currentSceneIndex])
   const setStoreCamera = useStore((s) => s.setFlyoverEditCamera)
+  const jumpToStart = useStore((s) => s.flyoverJumpToStart)
+  const setJumpToStart = useStore((s) => s.setFlyoverJumpToStart)
   const justEnabled = useRef(true)
   const lastStored = useRef<{ position: [number, number, number]; rotation: [number, number, number]; fov: number } | null>(null)
 
   useFrame(() => {
     if (!camera || !('fov' in camera)) return
     const start = scene?.flyover?.start
+    if (jumpToStart && start?.position && start?.rotation) {
+      const [x, y, z] = start.position
+      const [rx, ry, rz] = start.rotation
+      if (Number.isFinite(x + y + z + rx + ry + rz)) {
+        camera.position.set(x, y, z)
+        camera.rotation.set(rx, ry, rz)
+        camera.fov = start.fov != null && Number.isFinite(start.fov) ? start.fov : 50
+        camera.updateProjectionMatrix()
+        const state = {
+          position: [x, y, z] as [number, number, number],
+          rotation: [rx, ry, rz] as [number, number, number],
+          fov: camera.fov,
+        }
+        setFlyoverEditCamera(state)
+        lastStored.current = state
+        setStoreCamera(state)
+      }
+      setJumpToStart(false)
+    }
     if (justEnabled.current && start?.position && start?.rotation) {
       try {
         const [x, y, z] = start.position
@@ -459,6 +482,7 @@ function SceneContent() {
   // When playing, always run the flyover animation; only use edit controls when paused
   const editControlsActive = flyoverEditMode && !isPlaying
 
+  const { size } = useThree()
   const grainEffect = scene.effects.find((e): e is SceneEffectGrain => e.type === 'grain')
   const grainStart = grainEffect?.startOpacity ?? (grainEffect as { opacity?: number })?.opacity ?? 0.1
   const grainEnd = grainEffect?.endOpacity ?? (grainEffect as { opacity?: number })?.opacity ?? 0.1
@@ -507,18 +531,32 @@ function SceneContent() {
     (e): e is SceneEffectChromaticAberration => e.type === 'chromaticAberration'
   )
   const chromaticEnabled = chromaticEffect?.enabled ?? false
+  const chromaticOffsetVal =
+    chromaticEffect == null
+      ? 0.005
+      : lerp(
+          chromaticEffect.offsetStart ?? (chromaticEffect as { offset?: number }).offset ?? 0.005,
+          chromaticEffect.offsetEnd ?? (chromaticEffect as { offset?: number }).offset ?? 0.005
+        )
   const chromaticOffset = useMemo(
-    () => new THREE.Vector2(chromaticEffect?.offset ?? 0.005, (chromaticEffect?.offset ?? 0.005) * 0.5),
-    [chromaticEffect?.offset]
+    () => new THREE.Vector2(chromaticOffsetVal, chromaticOffsetVal * 0.5),
+    [chromaticOffsetVal]
   )
 
   const lensEffect = scene.effects.find(
     (e): e is SceneEffectLensDistortion => e.type === 'lensDistortion'
   )
   const lensEnabled = lensEffect?.enabled ?? false
+  const lensDistortionVal =
+    lensEffect == null
+      ? 0
+      : lerp(
+          lensEffect.distortionStart ?? (lensEffect as { distortion?: number }).distortion ?? 0,
+          lensEffect.distortionEnd ?? (lensEffect as { distortion?: number }).distortion ?? 0
+        )
   const lensDistortionVec = useMemo(
-    () => new THREE.Vector2(lensEffect?.distortion ?? 0, 0),
-    [lensEffect?.distortion]
+    () => new THREE.Vector2(lensDistortionVal, 0),
+    [lensDistortionVal]
   )
   const lensPrincipalPoint = useMemo(() => new THREE.Vector2(0, 0), [])
   const lensFocalLength = useMemo(() => new THREE.Vector2(1, 1), [])
@@ -615,7 +653,7 @@ function SceneContent() {
             focalLength={dofFocalLength}
             focusRange={dofFocusRange}
             bokehScale={dofBokehScale}
-            height={480}
+            height={size.height}
           />
         ) : (
           <></>
@@ -669,8 +707,9 @@ export function EditorCanvas() {
   const [w, h] = useStore((s) => s.project.aspectRatio)
   const isExporting = useStore((s) => s.isExporting)
   const exportRenderMode = useStore((s) => s.exportRenderMode)
+  const exportHeight = useStore((s) => s.exportHeight)
   const aspect = w / h
-  const height = 480
+  const height = isExporting ? exportHeight : 480
   const width = Math.round(height * aspect)
   const useAlpha = isExporting && exportRenderMode === 'plane-only'
 

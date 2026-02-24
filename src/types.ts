@@ -93,22 +93,26 @@ export interface SceneEffectDither {
   thresholdBias: number
 }
 
-/** Chromatic aberration (RGB shift) at edges. */
+/** Chromatic aberration (RGB shift) at edges. Keyframed start/end. */
 export interface SceneEffectChromaticAberration {
   type: 'chromaticAberration'
   enabled: boolean
-  /** Shift intensity (0–0.02 typical). */
-  offset: number
+  /** Shift intensity (0–0.02 typical). Start keyframe. */
+  offsetStart: number
+  /** Shift intensity. End keyframe. */
+  offsetEnd: number
   /** Radial falloff from center. */
   radialModulation: boolean
 }
 
-/** Lens distortion (barrel/pincushion). */
+/** Lens distortion (barrel/pincushion). Keyframed start/end. */
 export interface SceneEffectLensDistortion {
   type: 'lensDistortion'
   enabled: boolean
-  /** Radial distortion strength, e.g. -0.1 to 0.1. */
-  distortion: number
+  /** Radial distortion strength, e.g. -0.1 to 0.1. Start keyframe. */
+  distortionStart: number
+  /** Radial distortion. End keyframe. */
+  distortionEnd: number
 }
 
 /** Glitch: sporadic or constant. */
@@ -250,13 +254,15 @@ export function createDefaultScene(id: string): Scene {
       {
         type: 'chromaticAberration',
         enabled: false,
-        offset: 0.005,
+        offsetStart: 0.005,
+        offsetEnd: 0.005,
         radialModulation: true,
       },
       {
         type: 'lensDistortion',
         enabled: false,
-        distortion: 0.05,
+        distortionStart: 0.05,
+        distortionEnd: 0.05,
       },
       {
         type: 'glitch',

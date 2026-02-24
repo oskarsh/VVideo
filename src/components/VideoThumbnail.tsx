@@ -22,6 +22,7 @@ export function VideoThumbnail({
     setError(false)
     video.src = url
     video.muted = true
+    video.volume = 0
     video.playsInline = true
     video.crossOrigin = 'anonymous'
 

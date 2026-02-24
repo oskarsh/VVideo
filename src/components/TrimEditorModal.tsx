@@ -19,7 +19,7 @@ function useAudioWaveform(videoUrl: string | null, duration: number) {
     let cancelled = false
     setError(null)
     const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-    fetch(videoUrl, { mode: 'cors' })
+    fetch(videoUrl)
       .then((r) => r.arrayBuffer())
       .then((buf) => ctx.decodeAudioData(buf))
       .then((buffer) => {
@@ -144,6 +144,7 @@ export function TrimEditorModal({
     }
     video.src = videoUrl
     video.muted = true
+    video.volume = 0
     video.playsInline = true
     video.crossOrigin = 'anonymous'
     video.addEventListener('loadedmetadata', onLoadedMetadata)
@@ -316,7 +317,7 @@ export function TrimEditorModal({
 
         <div className="p-4 flex-1 min-h-0 flex flex-col gap-4">
           <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-            <video ref={videoRef} className="w-full h-full object-contain" muted playsInline loop={false} onTimeUpdate={() => {}} />
+            <video ref={videoRef} className="w-full h-full object-contain" muted playsInline loop={false} onTimeUpdate={() => { }} />
             <div className="absolute bottom-2 left-2 right-2 flex justify-between text-xs text-white/80">
               <span>{formatTime(previewTime)}</span>
               <span>Trim: {formatTime(trim.start)} – {formatTime(trim.end)}</span>
