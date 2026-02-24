@@ -4,6 +4,7 @@ import { CollapsibleSection } from './CollapsibleSection'
 import { EffectsPanel } from './EffectsPanel'
 import { FlyoverPanel } from './FlyoverPanel'
 import { GlobalDitherControls } from './GlobalDitherControls'
+import { TextPanel } from './TextPanel'
 
 export function RightSidebar() {
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
@@ -30,6 +31,9 @@ export function RightSidebar() {
           </CollapsibleSection>
           <CollapsibleSection title="Camera effects" defaultOpen={true}>
             <EffectsPanel />
+          </CollapsibleSection>
+          <CollapsibleSection title="Text" defaultOpen={false}>
+            <TextPanel />
           </CollapsibleSection>
         </>
       )}

@@ -31,6 +31,7 @@ import type {
   SceneEffectGlitch,
   SceneEffectVignette,
   SceneEffectScanline,
+  SceneText,
 } from '@/types'
 import { getPlaneMedia } from '@/types'
 import { getHandheldOffsets } from '@/utils/smoothNoise'
@@ -330,7 +331,7 @@ function PlaneSVG({
             paths.push({ shapes, color: path.color.clone() })
           }
         }
-        const svg = data.xml
+        const svg = data.xml.documentElement
         let viewBox = { minX: 0, minY: 0, width: 100, height: 100 }
         const vb = svg.getAttribute('viewBox')
         if (vb) {
@@ -404,6 +405,74 @@ function PlaneSVG({
         <mesh key={i} geometry={geometry} material={material} position={position} />
       ))}
     </group>
+  )
+}
+
+const TEXT_CANVAS_PX = 64
+
+function TextPlane3D({ text }: { text: SceneText }) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null)
+  const [aspect, setAspect] = useState(2)
+  const texRef = useRef<THREE.CanvasTexture | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const fontFamily = text.fontFamily || 'IBM Plex Mono'
+    const fontWeight = text.fontWeight ?? 400
+    const fontSpec = `${typeof fontWeight === 'number' ? fontWeight : 400} ${TEXT_CANVAS_PX}px "${fontFamily}"`
+    document.fonts.load(fontSpec).then(() => {
+      if (cancelled) return
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      const content = (text.content || ' ').trim() || ' '
+      ctx.font = fontSpec
+      const metrics = ctx.measureText(content)
+      const padding = 8
+      const w = Math.max(64, Math.ceil(metrics.width) + padding * 2)
+      const h = Math.ceil(TEXT_CANVAS_PX * 1.2 + padding * 2)
+      canvas.width = w
+      canvas.height = h
+      ctx.font = fontSpec
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = text.color || '#ffffff'
+      ctx.fillText(content, padding, h / 2)
+      const tex = new THREE.CanvasTexture(canvas)
+      tex.minFilter = THREE.LinearFilter
+      tex.magFilter = THREE.LinearFilter
+      tex.needsUpdate = true
+      texRef.current = tex
+      setTexture(tex)
+      setAspect(w / h)
+    })
+    return () => {
+      cancelled = true
+      texRef.current?.dispose()
+      texRef.current = null
+      setTexture(null)
+    }
+  }, [text.content, text.fontFamily, text.fontWeight, text.color])
+
+  if (!texture) return null
+  const worldH = (text.fontSize ?? 0.15) * (text.scale ?? 1)
+  const worldW = worldH * aspect
+  return (
+    <mesh
+      ref={meshRef}
+      position={text.position}
+      rotation={text.rotation}
+      scale={[worldW, worldH, 1]}
+    >
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial
+        map={texture}
+        side={THREE.DoubleSide}
+        transparent
+        alphaTest={0.01}
+        depthWrite={true}
+      />
+    </mesh>
   )
 }
 
@@ -580,11 +649,15 @@ function WASDFly() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!isFlyKey(e.code)) return
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable) return
       e.preventDefault()
       setFlyKey(e.code, true)
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (!isFlyKey(e.code)) return
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable) return
       e.preventDefault()
       setFlyKey(e.code, false)
     }
@@ -654,6 +727,34 @@ function ExportClearAlpha() {
   return null
 }
 
+function useFormFocus(): boolean {
+  const [focused, setFocused] = useState(false)
+  useEffect(() => {
+    const check = () => {
+      const el = document.activeElement
+      if (!el || !(el instanceof HTMLElement)) {
+        setFocused(false)
+        return
+      }
+      const tag = el.tagName.toLowerCase()
+      const isForm =
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        el.isContentEditable === true
+      setFocused(isForm)
+    }
+    check()
+    document.addEventListener('focusin', check)
+    document.addEventListener('focusout', check)
+    return () => {
+      document.removeEventListener('focusin', check)
+      document.removeEventListener('focusout', check)
+    }
+  }, [])
+  return focused
+}
+
 function SceneContent() {
   const project = useStore((s) => s.project)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
@@ -673,8 +774,9 @@ function SceneContent() {
   const sceneLocalTime = currentTime - sceneStartTime
   const sceneDuration = scene.durationSeconds
 
-  // When playing, always run the flyover animation; only use edit controls when paused
-  const editControlsActive = flyoverEditMode && !isPlaying
+  const formFocused = useFormFocus()
+  // When playing, always run the flyover animation; only use edit controls when paused and not typing in a form
+  const editControlsActive = flyoverEditMode && !isPlaying && !formFocused
 
   const { size } = useThree()
   const grainEffect = scene.effects.find((e): e is SceneEffectGrain => e.type === 'grain')
@@ -861,6 +963,9 @@ function SceneContent() {
         }
         return null
       })()}
+      {(scene.texts ?? []).filter((t) => t.mode === '3d').map((t) => (
+        <TextPlane3D key={t.id} text={t} />
+      ))}
       <EffectComposer>
         {dofEnabled ? (
           <DepthOfField

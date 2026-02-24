@@ -170,6 +170,35 @@ export type SceneEffect =
 /** How video time is driven: normal = real-time with optional speed; fitScene = stretch/compress to fill scene duration. */
 export type VideoPlaybackMode = 'normal' | 'fitScene'
 
+/** Text overlay: either placed in 3D space or static in front of camera. */
+export type SceneTextMode = '3d' | 'static'
+
+export interface SceneText {
+  id: string
+  mode: SceneTextMode
+  content: string
+  /** Google Font family name, e.g. "IBM Plex Mono" */
+  fontFamily: string
+  /** Font weight (number 100–900 or "normal"/"bold"). */
+  fontWeight?: number | string
+  /** Hex color, e.g. "#ffffff" */
+  color: string
+  /** For 3D: world-space scale. For static: font size in px. */
+  fontSize: number
+  /** 3D only: position [x, y, z] in world space. */
+  position: [number, number, number]
+  /** 3D only: rotation [x, y, z] in radians. */
+  rotation: [number, number, number]
+  /** 3D only: uniform scale multiplier. */
+  scale: number
+  /** Static only: horizontal alignment. */
+  staticAlignX: 'left' | 'center' | 'right'
+  /** Static only: vertical alignment. */
+  staticAlignY: 'top' | 'center' | 'bottom'
+  /** Static only: padding from edge in px. */
+  staticPadding: number
+}
+
 export interface Scene {
   id: string
   durationSeconds: number
@@ -198,6 +227,8 @@ export interface Scene {
     easing?: FlyoverEasing
   } | null
   effects: SceneEffect[]
+  /** Text overlays: 3D in scene or static in front of camera. */
+  texts: SceneText[]
 }
 
 /** Panel content: video on plane, image on plane, or SVG rendered as 3D shape (no plane). */
@@ -233,6 +264,25 @@ export function getPlaneMedia(project: Project): PlaneMedia | null {
 }
 
 export const DEFAULT_ASPECT: [number, number] = [16, 9]
+
+/** Default values for a new scene text. */
+export function createDefaultSceneText(id: string): SceneText {
+  return {
+    id,
+    mode: '3d',
+    content: 'Text',
+    fontFamily: 'IBM Plex Mono',
+    fontWeight: 400,
+    color: '#ffffff',
+    fontSize: 0.15,
+    position: [0, 0, 1.5],
+    rotation: [0, 0, 0],
+    scale: 1,
+    staticAlignX: 'center',
+    staticAlignY: 'center',
+    staticPadding: 24,
+  }
+}
 
 export function createDefaultScene(id: string): Scene {
   return {
@@ -308,6 +358,7 @@ export function createDefaultScene(id: string): Scene {
         scrollSpeed: 0,
       },
     ],
+    texts: [],
   }
 }
 

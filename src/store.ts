@@ -186,6 +186,7 @@ export const useStore = create<EditorState>((set) => ({
         const duplicate: Scene = {
           ...scene,
           id: crypto.randomUUID(),
+          texts: (scene.texts ?? []).map((t) => ({ ...t, id: crypto.randomUUID() })),
         }
         const scenes = [...s.project.scenes]
         scenes.splice(index + 1, 0, duplicate)

@@ -9,6 +9,7 @@ import { ChangelogModal, useChangelog } from '@/components/ChangelogModal'
 import { WelcomeModal, useWelcome } from '@/components/WelcomeModal'
 import { AboutModal } from '@/components/AboutModal'
 import { VVideoLogo } from '@/components/VVideoLogo'
+import { StaticTextOverlay } from '@/components/StaticTextOverlay'
 import { getPlaneMedia } from '@/types'
 
 function isMediaDrag(e: React.DragEvent | DragEvent): boolean {
@@ -182,6 +183,20 @@ function UndoRedoKeys() {
   return null
 }
 
+function CanvasStaticTextOverlay() {
+  const project = useStore((s) => s.project)
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const isExporting = useStore((s) => s.isExporting)
+  const exportHeight = useStore((s) => s.exportHeight)
+  const [w, h] = project.aspectRatio
+  const aspect = w / h
+  const height = isExporting ? exportHeight : 480
+  const width = Math.round(height * aspect)
+  const scene = project.scenes[currentSceneIndex]
+  const texts = scene?.texts ?? []
+  return <StaticTextOverlay width={width} height={height} texts={texts} />
+}
+
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null)
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
@@ -274,6 +289,7 @@ export default function App() {
           >
             <div className="relative" style={flyoverEditMode ? { pointerEvents: 'auto' } : undefined}>
               <EditorCanvas />
+              <CanvasStaticTextOverlay />
             </div>
           </div>
           <CameraKeyframeButtons />

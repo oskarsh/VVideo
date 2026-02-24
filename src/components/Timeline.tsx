@@ -580,7 +580,8 @@ export function Timeline() {
                       )
                     }
                     const range = curve.max - curve.min
-                    const n = range === 0 ? 0.5 : (v: number) => (v - curve.min) / range
+                    const n: (v: number) => number =
+                      range === 0 ? () => 0.5 : (v) => (v - curve.min) / range
                     const y0Pct = 100 - n(curve.startVal) * 100
                     const y1Pct = 100 - n(curve.endVal) * 100
                     const stroke = AUTOMATION_CURVE_COLORS[laneIndex % AUTOMATION_CURVE_COLORS.length]

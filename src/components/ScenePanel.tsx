@@ -17,7 +17,6 @@ export function ScenePanel() {
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const clearScene = useStore((s) => s.clearScene)
   const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
-  const setProjectPlaneVideo = useStore((s) => s.setProjectPlaneVideo)
   const setProjectPlaneMedia = useStore((s) => s.setProjectPlaneMedia)
   const setProjectPlaneExtrusionDepth = useStore((s) => s.setProjectPlaneExtrusionDepth)
   const setProjectPlaneSvgColor = useStore((s) => s.setProjectPlaneSvgColor)
