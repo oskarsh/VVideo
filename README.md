@@ -1,7 +1,7 @@
 # VVideo
 
 **A web-based 3D video editor for social content.**  
-Compose scenes with background + panel videos, flyover cameras, and real-time effects — all in the browser. Default 9:16 for Reels, TikTok, and Shorts.
+Compose scenes with background + panel videos, flyover cameras, and real-time effects — all in the browser. Choose 16:9 or 9:16 aspect for Reels, TikTok, and Shorts.
 
 ---
 
@@ -10,10 +10,10 @@ Compose scenes with background + panel videos, flyover cameras, and real-time ef
 | Feature | Description |
 |--------|-------------|
 | **Scenes** | Cut between multiple scenes; each has duration, background video, and optional video-on-plane. |
-| **3D flyover** | Define start/end camera position, rotation, and FOV per scene. Presets: Dolly in, Orbit right, Rise. |
-| **Effects** | Zoom, grain, depth of field, handheld shake, dither, lens distortion — keyframed per scene. |
-| **Text** | Add text layers with Google Fonts or custom uploads; simple fade in/out. |
-| **Export** | In-browser WebM export (VP9 when supported). |
+| **3D flyover** | Define start/end camera position, rotation, and FOV per scene. Fly with orbit + WASD/QE/IJKL; set keyframes with canvas buttons; motion curve (easing) in the right sidebar. |
+| **Effects** | Zoom, grain, depth of field, handheld shake, dither, chromatic aberration, lens distortion, glitch, vignette, scanlines — keyframed per scene where applicable. |
+| **Undo / redo** | Full history for project edits (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z). |
+| **Export** | In-browser WebM (VP9 when supported). Choose resolution (480p, 720p, 1080p), framerate, bitrate; full composite or panel-only (transparent). Audio is muted. |
 
 ---
 
@@ -32,10 +32,10 @@ Open **http://localhost:5173**. Drop a background video (and optionally a clip f
 
 ```
 src/
-├── store.ts           # Zustand store (project, scenes, playback, export)
-├── types.ts           # Scene, flyover, effects, text layers
+├── store.ts           # Zustand store (project, scenes, playback, export, undo history)
+├── types.ts           # Scene, flyover, effects
 ├── components/        # EditorCanvas (R3F + postprocessing), Sidebar, Timeline, etc.
-├── effects/           # Dither, lens distortion, and other post effects
+├── effects/           # Dither, lens distortion
 ├── lib/               # Presets and utilities
 └── utils/             # Helpers (e.g. smooth noise)
 ```

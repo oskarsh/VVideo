@@ -1,4 +1,4 @@
-// Single scene: background + optional video plane + text + effects + optional flyover
+// Single scene: background + optional video plane + effects + optional flyover
 export interface FlyoverKeyframe {
   position: [number, number, number]
   rotation: [number, number, number] // euler in radians (optional; can derive from look-at)
@@ -200,17 +200,36 @@ export interface Scene {
   effects: SceneEffect[]
 }
 
+/** Panel content: video on plane, image on plane, or SVG rendered as 3D shape (no plane). */
+export type PlaneMedia =
+  | { type: 'video'; url: string }
+  | { type: 'image'; url: string }
+  | { type: 'svg'; url: string }
+
 export interface Project {
   id: string
   name: string
   aspectRatio: [number, number] // e.g. [16, 9] or [9, 16]
   /** One shared background video for all scenes; each scene defines its own trim (cut). */
   backgroundVideoUrl: string | null
-  /** One shared plane video for all scenes; each scene defines its own trim (cut). */
-  planeVideoUrl: string | null
+  /** One shared plane video for all scenes; each scene defines its own trim (cut). @deprecated Use planeMedia instead. */
+  planeVideoUrl?: string | null
+  /** Panel media: video, image, or SVG. When set, takes precedence over planeVideoUrl. */
+  planeMedia?: PlaneMedia | null
+  /** Extrusion depth for panel (video/image plane or SVG shape). 0 = flat. */
+  planeExtrusionDepth?: number
+  /** When panel is SVG: override fill color (hex e.g. #ffffff). Null = use SVG’s own colors. */
+  planeSvgColor?: string | null
   /** Global dither applied to all scenes. */
   dither: SceneEffectDither
   scenes: Scene[]
+}
+
+/** Resolve current panel media from project (supports legacy planeVideoUrl). */
+export function getPlaneMedia(project: Project): PlaneMedia | null {
+  if (project.planeMedia != null) return project.planeMedia
+  const url = project.planeVideoUrl
+  return url ? { type: 'video', url } : null
 }
 
 export const DEFAULT_ASPECT: [number, number] = [16, 9]
@@ -310,6 +329,8 @@ export function createDefaultProject(): Project {
     aspectRatio: DEFAULT_ASPECT,
     backgroundVideoUrl: null,
     planeVideoUrl: null,
+    planeMedia: null,
+    planeExtrusionDepth: 0,
     dither: { ...DEFAULT_DITHER },
     scenes: [createDefaultScene(crypto.randomUUID())],
   }

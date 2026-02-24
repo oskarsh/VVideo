@@ -5,6 +5,8 @@ import {
   setSeenVersion,
   type ChangelogRelease,
 } from '@/changelog'
+import { getWelcomeSeen } from '@/components/WelcomeModal'
+import { VVideoLogo } from '@/components/VVideoLogo'
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
@@ -32,6 +34,7 @@ export function ChangelogModal({
       >
         <div className="px-5 pt-5 pb-3 border-b border-white/10 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
+            <VVideoLogo className="h-5 text-white" />
             <span className="text-lg font-semibold text-white">What's new</span>
             <span className="text-sm text-white/50 font-mono">v{release.version}</span>
             <span className="text-xs text-white/40">{formatDate(release.date)}</span>
@@ -81,7 +84,8 @@ export function useChangelog() {
   const release = getLatestRelease()
 
   useEffect(() => {
-    if (getSeenVersion() !== release.version) setAutoShow(true)
+    // Only auto-show changelog after user has seen the welcome (first-time users see welcome only)
+    if (getWelcomeSeen() && getSeenVersion() !== release.version) setAutoShow(true)
   }, [release.version])
 
   const open = () => setManualShow(true)

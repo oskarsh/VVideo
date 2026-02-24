@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Project, Scene, FlyoverKeyframe, SceneEffectDither } from '@/types'
+import type { Project, Scene, FlyoverKeyframe, SceneEffectDither, PlaneMedia } from '@/types'
 import { createDefaultProject, createDefaultScene, DEFAULT_DITHER } from '@/types'
 
 /** Snapshot of undoable state for history. */
@@ -45,7 +45,7 @@ interface EditorState {
   loopCurrentScene: boolean
   /** Only used during export: 'full' = composite, 'plane-only' = transparent background */
   exportRenderMode: 'full' | 'plane-only'
-  /** Export output height in pixels (e.g. 480, 720, 1080). Used when isExporting. */
+  /** Export output height in pixels (e.g. 480, 720, 1080, 1440, 2160). Used when isExporting. */
   exportHeight: number
   setExportHeight: (h: number) => void
   historyPast: HistorySnapshot[]
@@ -71,6 +71,9 @@ interface EditorState {
   setProjectAspectRatio: (ratio: [number, number]) => void
   setProjectBackgroundVideo: (url: string | null) => void
   setProjectPlaneVideo: (url: string | null) => void
+  setProjectPlaneMedia: (media: PlaneMedia | null) => void
+  setProjectPlaneExtrusionDepth: (depth: number) => void
+  setProjectPlaneSvgColor: (color: string | null) => void
   setBackgroundTrim: (sceneIndex: number, trim: { start: number; end: number } | null, endClaimed?: boolean) => void
   setPlaneTrim: (sceneIndex: number, trim: { start: number; end: number } | null, endClaimed?: boolean) => void
   setFlyoverEnabled: (sceneIndex: number, enabled: boolean) => void
@@ -89,6 +92,9 @@ interface EditorState {
   /** When true, canvas snaps camera to start keyframe once then clears. */
   flyoverJumpToStart: boolean
   setFlyoverJumpToStart: (v: boolean) => void
+  /** When true, timeline shows automation curves for effect keyframes (start/end params). */
+  timelineShowAutomation: boolean
+  setTimelineShowAutomation: (v: boolean) => void
 }
 
 export const useStore = create<EditorState>((set) => ({
@@ -241,7 +247,33 @@ export const useStore = create<EditorState>((set) => ({
   setProjectPlaneVideo: (url) =>
     set(
       withHistory((s) => ({
-        project: { ...s.project, planeVideoUrl: url },
+        project: {
+          ...s.project,
+          planeVideoUrl: url ?? undefined,
+          planeMedia: url ? { type: 'video', url } : null,
+        },
+      }))
+    ),
+  setProjectPlaneMedia: (media) =>
+    set(
+      withHistory((s) => ({
+        project: {
+          ...s.project,
+          planeMedia: media,
+          planeVideoUrl: media?.type === 'video' ? media.url : undefined,
+        },
+      }))
+    ),
+  setProjectPlaneExtrusionDepth: (depth) =>
+    set(
+      withHistory((s) => ({
+        project: { ...s.project, planeExtrusionDepth: Math.max(0, depth) },
+      }))
+    ),
+  setProjectPlaneSvgColor: (color) =>
+    set(
+      withHistory((s) => ({
+        project: { ...s.project, planeSvgColor: color ?? undefined },
       }))
     ),
   setBackgroundTrim: (sceneIndex, trim, endClaimed) =>
@@ -253,14 +285,14 @@ export const useStore = create<EditorState>((set) => ({
             i !== sceneIndex
               ? sc
               : {
-                  ...sc,
-                  backgroundTrim: trim,
-                  ...(trim === null
-                    ? { backgroundTrimEndClaimed: false }
-                    : endClaimed === true
-                      ? { backgroundTrimEndClaimed: true }
-                      : {}),
-                }
+                ...sc,
+                backgroundTrim: trim,
+                ...(trim === null
+                  ? { backgroundTrimEndClaimed: false }
+                  : endClaimed === true
+                    ? { backgroundTrimEndClaimed: true }
+                    : {}),
+              }
           ),
         },
       }))
@@ -274,14 +306,14 @@ export const useStore = create<EditorState>((set) => ({
             i !== sceneIndex
               ? sc
               : {
-                  ...sc,
-                  planeTrim: trim,
-                  ...(trim === null
-                    ? { planeTrimEndClaimed: false }
-                    : endClaimed === true
-                      ? { planeTrimEndClaimed: true }
-                      : {}),
-                }
+                ...sc,
+                planeTrim: trim,
+                ...(trim === null
+                  ? { planeTrimEndClaimed: false }
+                  : endClaimed === true
+                    ? { planeTrimEndClaimed: true }
+                    : {}),
+              }
           ),
         },
       }))
@@ -322,11 +354,11 @@ export const useStore = create<EditorState>((set) => ({
           scenes: s.project.scenes.map((sc, i) =>
             i === sceneIndex
               ? {
-                  ...sc,
-                  effects: sc.effects.map((e, j) =>
-                    j === effectIndex ? { ...e, ...patch } : e
-                  ),
-                }
+                ...sc,
+                effects: sc.effects.map((e, j) =>
+                  j === effectIndex ? { ...e, ...patch } : e
+                ),
+              }
               : sc
           ),
         },
@@ -355,4 +387,6 @@ export const useStore = create<EditorState>((set) => ({
   setFlyoverEditCamera: (v) => set({ flyoverEditCamera: v }),
   flyoverJumpToStart: false,
   setFlyoverJumpToStart: (v) => set({ flyoverJumpToStart: v }),
+  timelineShowAutomation: false,
+  setTimelineShowAutomation: (v) => set({ timelineShowAutomation: v }),
 }))

@@ -6,14 +6,27 @@ import { Sidebar } from '@/components/Sidebar'
 import { RightSidebar } from '@/components/RightSidebar'
 import { Timeline } from '@/components/Timeline'
 import { ChangelogModal, useChangelog } from '@/components/ChangelogModal'
+import { WelcomeModal, useWelcome } from '@/components/WelcomeModal'
+import { AboutModal } from '@/components/AboutModal'
+import { VVideoLogo } from '@/components/VVideoLogo'
+import { getPlaneMedia } from '@/types'
 
-function isVideoDrag(e: React.DragEvent | DragEvent): boolean {
+function isMediaDrag(e: React.DragEvent | DragEvent): boolean {
   if (!e.dataTransfer?.types.includes('Files')) return false
   const item = e.dataTransfer.items?.[0]
-  return item?.kind === 'file' && item.type.startsWith('video/')
+  if (item?.kind !== 'file') return false
+  const t = item.type
+  return t.startsWith('video/') || t.startsWith('image/') || t === 'image/svg+xml'
 }
 
-function VideoDropOverlay({
+function getPlaneMediaType(file: File): 'video' | 'image' | 'svg' {
+  if (file.type.startsWith('video/')) return 'video'
+  if (file.type === 'image/svg+xml' || file.name?.toLowerCase().endsWith('.svg')) return 'svg'
+  if (file.type.startsWith('image/')) return 'image'
+  return 'image'
+}
+
+function MediaDropOverlay({
   onClose,
   onDrop,
 }: {
@@ -38,9 +51,13 @@ function VideoDropOverlay({
   const handleDrop = (e: React.DragEvent, type: 'background' | 'plane') => {
     e.preventDefault()
     const file = e.dataTransfer.files?.[0]
-    if (file?.type.startsWith('video/')) {
-      onDrop(file, type)
+    if (!file) {
+      onClose()
+      return
     }
+    if (type === 'background' && !file.type.startsWith('video/')) return
+    if (type === 'plane' && !file.type.startsWith('video/') && !file.type.startsWith('image/') && file.type !== 'image/svg+xml' && !file.name?.toLowerCase().endsWith('.svg')) return
+    onDrop(file, type)
     onClose()
   }
 
@@ -66,8 +83,8 @@ function VideoDropOverlay({
         onDrop={(e) => handleDrop(e, 'plane')}
       >
         <span className="text-4xl opacity-60">▢</span>
-        <span className="text-lg font-medium text-white/90">Panel video</span>
-        <span className="text-sm text-white/60">Drop video here</span>
+        <span className="text-lg font-medium text-white/90">Panel</span>
+        <span className="text-sm text-white/60">Drop video, image or SVG here</span>
       </div>
     </div>
   )
@@ -170,14 +187,17 @@ export default function App() {
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const [showDropOverlay, setShowDropOverlay] = useState(false)
   const changelog = useChangelog()
+  const welcome = useWelcome()
+  const [aboutOpen, setAboutOpen] = useState(false)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
-  const setProjectPlaneVideo = useStore((s) => s.setProjectPlaneVideo)
   const setBackgroundTrim = useStore((s) => s.setBackgroundTrim)
   const setPlaneTrim = useStore((s) => s.setPlaneTrim)
 
+  const setProjectPlaneMedia = useStore((s) => s.setProjectPlaneMedia)
+
   const handleBackgroundDragOver = (e: React.DragEvent) => {
-    if (isVideoDrag(e)) {
+    if (isMediaDrag(e)) {
       e.preventDefault()
       e.dataTransfer.dropEffect = 'copy'
       setShowDropOverlay(true)
@@ -190,8 +210,9 @@ export default function App() {
       setProjectBackgroundVideo(url)
       setBackgroundTrim(currentSceneIndex, null)
     } else {
-      setProjectPlaneVideo(url)
-      setPlaneTrim(currentSceneIndex, null)
+      const mediaType = getPlaneMediaType(file)
+      setProjectPlaneMedia(mediaType === 'video' ? { type: 'video', url } : mediaType === 'svg' ? { type: 'svg', url } : { type: 'image', url })
+      if (mediaType === 'video') setPlaneTrim(currentSceneIndex, null)
     }
     setShowDropOverlay(false)
   }
@@ -203,28 +224,37 @@ export default function App() {
       onDragOver={handleBackgroundDragOver}
     >
       {showDropOverlay && (
-        <VideoDropOverlay
+        <MediaDropOverlay
           onClose={() => setShowDropOverlay(false)}
           onDrop={handleDropOverlayDrop}
         />
       )}
+      <WelcomeModal open={welcome.show} onClose={welcome.close} />
       <ChangelogModal
         open={changelog.show}
         onClose={changelog.close}
         release={changelog.release}
       />
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <PlaybackLoop />
       <SpacebarPlayback />
       <UndoRedoKeys />
       <header className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold tracking-tight">VVideo</h1>
+          <VVideoLogo className="h-6 text-white" />
           <button
             type="button"
             onClick={changelog.open}
             className="text-xs text-white/50 hover:text-white/80 transition-colors"
           >
             What's new
+          </button>
+          <button
+            type="button"
+            onClick={() => setAboutOpen(true)}
+            className="text-xs text-white/50 hover:text-white/80 transition-colors"
+          >
+            About
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -429,12 +459,27 @@ const EXPORT_BITRATES = [
   { label: '8 Mbps', value: 8_000_000 },
   { label: '12 Mbps', value: 12_000_000 },
   { label: '16 Mbps', value: 16_000_000 },
+  { label: '24 Mbps', value: 24_000_000 },
+  { label: '32 Mbps', value: 32_000_000 },
 ] as const
 const EXPORT_RESOLUTIONS = [
   { label: '480p', value: 480 },
   { label: '720p', value: 720 },
   { label: '1080p', value: 1080 },
+  { label: '2K', value: 1440 },
+  { label: '4K', value: 2160 },
 ] as const
+/** Resolutions that use frame-by-frame export (smooth, may be slower than real-time). */
+const FRAME_BY_FRAME_RESOLUTION_THRESHOLD = 1440
+
+function sceneIndexAtTime(scenes: { durationSeconds: number }[], t: number): number {
+  let acc = 0
+  for (let i = 0; i < scenes.length; i++) {
+    if (t < acc + scenes[i].durationSeconds) return i
+    acc += scenes[i].durationSeconds
+  }
+  return Math.max(0, scenes.length - 1)
+}
 
 function ExportButton() {
   const isExporting = useStore((s) => s.isExporting)
@@ -443,6 +488,7 @@ function ExportButton() {
   const [bitrate, setBitrate] = useState(8_000_000)
   const [content, setContent] = useState<'full' | 'plane-only'>('full')
   const [resolution, setResolution] = useState(720)
+  const [frameByFrame, setFrameByFrame] = useState(false)
   const setExporting = useStore((s) => s.setExporting)
   const setExportRenderMode = useStore((s) => s.setExportRenderMode)
   const setExportHeight = useStore((s) => s.setExportHeight)
@@ -450,7 +496,7 @@ function ExportButton() {
   const project = useStore((s) => s.project)
   const setCurrentTime = useStore((s) => s.setCurrentTime)
   const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
-  const planeVideoUrl = useStore((s) => s.project.planeVideoUrl)
+  const hasPlaneMedia = !!getPlaneMedia(project)
 
   const runExport = async () => {
     setExportRenderMode(content)
@@ -459,7 +505,9 @@ function ExportButton() {
     setExportDialogOpen(false)
     setCurrentSceneIndex(0)
     setCurrentTime(0)
-    setPlaying(true)
+    const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
+    const useFrameByFrame = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD || frameByFrame
+    if (!useFrameByFrame) setPlaying(true)
     // Let canvas remount with alpha if plane-only
     await new Promise((r) => setTimeout(r, 100))
     const canvas = document.querySelector('canvas')
@@ -493,8 +541,22 @@ function ExportButton() {
       setPlaying(false)
     }
     recorder.start(100)
-    const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
-    await new Promise((r) => setTimeout(r, totalDuration * 1000 + 500))
+    if (useFrameByFrame) {
+      const frameDurationMs = 1000 / framerate
+      const totalFrames = Math.ceil(totalDuration * framerate)
+      for (let i = 0; i < totalFrames; i++) {
+        const frameStart = performance.now()
+        const t = Math.min(i / framerate, totalDuration)
+        setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
+        setCurrentTime(t)
+        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+        const elapsed = performance.now() - frameStart
+        const wait = Math.max(0, frameDurationMs - elapsed)
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+      }
+    } else {
+      await new Promise((r) => setTimeout(r, totalDuration * 1000 + 500))
+    }
     recorder.stop()
   }
 
@@ -516,9 +578,11 @@ function ExportButton() {
           setBitrate={setBitrate}
           resolution={resolution}
           setResolution={setResolution}
+          frameByFrame={frameByFrame}
+          setFrameByFrame={setFrameByFrame}
           content={content}
           setContent={setContent}
-          hasPlaneVideo={!!planeVideoUrl}
+          hasPlaneMedia={hasPlaneMedia}
           onClose={() => setExportDialogOpen(false)}
           onExport={runExport}
         />
@@ -534,9 +598,11 @@ function ExportDialog({
   setBitrate,
   resolution,
   setResolution,
+  frameByFrame,
+  setFrameByFrame,
   content,
   setContent,
-  hasPlaneVideo,
+  hasPlaneMedia,
   onClose,
   onExport,
 }: {
@@ -546,12 +612,15 @@ function ExportDialog({
   setBitrate: (n: number) => void
   resolution: number
   setResolution: (n: number) => void
+  frameByFrame: boolean
+  setFrameByFrame: (v: boolean) => void
   content: 'full' | 'plane-only'
   setContent: (c: 'full' | 'plane-only') => void
-  hasPlaneVideo: boolean
+  hasPlaneMedia: boolean
   onClose: () => void
   onExport: () => void
 }) {
+  const useFrameByFrameForRes = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-5 shadow-xl">
@@ -574,6 +643,30 @@ function ExportDialog({
                 </button>
               ))}
             </div>
+            {useFrameByFrameForRes && (
+              <p className="text-xs text-white/50 mt-1.5">
+                2K/4K always use frame-by-frame for a smooth result.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10">
+              <input
+                type="checkbox"
+                checked={frameByFrame || useFrameByFrameForRes}
+                onChange={(e) => setFrameByFrame(e.target.checked)}
+                disabled={useFrameByFrameForRes}
+                className="rounded text-white"
+              />
+              <div>
+                <span className="text-sm font-medium text-white">Smooth export (frame-by-frame)</span>
+                <p className="text-xs text-white/50 mt-0.5">
+                  {useFrameByFrameForRes
+                    ? 'Always on for 2K/4K.'
+                    : 'No dropped frames; export may take longer than real-time.'}
+                </p>
+              </div>
+            </label>
           </div>
           <div>
             <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
@@ -630,7 +723,7 @@ function ExportDialog({
                 </div>
               </label>
               <label
-                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${hasPlaneVideo
+                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${hasPlaneMedia
                   ? 'bg-white/5 border-white/10 hover:bg-white/10'
                   : 'border-white/5 bg-white/5 opacity-60 cursor-not-allowed'
                   }`}
@@ -639,16 +732,16 @@ function ExportDialog({
                   type="radio"
                   name="export-content"
                   checked={content === 'plane-only'}
-                  onChange={() => hasPlaneVideo && setContent('plane-only')}
-                  disabled={!hasPlaneVideo}
+                  onChange={() => hasPlaneMedia && setContent('plane-only')}
+                  disabled={!hasPlaneMedia}
                   className="text-white"
                 />
                 <div>
                   <span className="text-sm font-medium text-white">Panel only (transparent)</span>
                   <p className="text-xs text-white/50 mt-0.5">
-                    {hasPlaneVideo
-                      ? 'Panel video + effects, transparent background (WebM with alpha)'
-                      : 'Add a panel video in the sidebar to use this'}
+                    {hasPlaneMedia
+                      ? 'Panel + effects, transparent background (WebM with alpha)'
+                      : 'Add a panel video, image or SVG in the sidebar to use this'}
                   </p>
                 </div>
               </label>

@@ -19,6 +19,7 @@ export function projectForPreset(project: Project): Project {
     aspectRatio: project.aspectRatio,
     backgroundVideoUrl: null,
     planeVideoUrl: null,
+    planeMedia: null,
     dither: project.dither ?? DEFAULT_DITHER,
     scenes: project.scenes.map((s) => ({ ...s })),
   }
@@ -33,6 +34,9 @@ export function applyPreset(preset: Preset, currentProject: Project): Project {
     aspectRatio: preset.project.aspectRatio,
     backgroundVideoUrl: currentProject.backgroundVideoUrl,
     planeVideoUrl: currentProject.planeVideoUrl,
+    planeMedia: currentProject.planeMedia,
+    planeExtrusionDepth: currentProject.planeExtrusionDepth,
+    planeSvgColor: currentProject.planeSvgColor,
     dither: preset.project.dither ?? currentProject.dither ?? DEFAULT_DITHER,
     scenes: preset.project.scenes.map((s, i) => {
       const existing = currentProject.scenes[i]

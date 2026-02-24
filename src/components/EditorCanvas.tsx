@@ -12,6 +12,7 @@ import {
 } from '@react-three/postprocessing'
 import { GlitchMode } from 'postprocessing'
 import * as THREE from 'three'
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { useStore } from '@/store'
 import { setFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyKeys, setFlyKey, isFlyKey } from '@/flyKeys'
@@ -31,6 +32,7 @@ import type {
   SceneEffectVignette,
   SceneEffectScanline,
 } from '@/types'
+import { getPlaneMedia } from '@/types'
 import { getHandheldOffsets } from '@/utils/smoothNoise'
 
 const FOV_DEG = 50
@@ -120,6 +122,8 @@ function BackgroundVideo({
   )
 }
 
+const BASE_PLANE_SIZE = 1.2
+
 function PlaneVideo({
   url,
   trim,
@@ -128,6 +132,7 @@ function PlaneVideo({
   scrubTime,
   playbackMode,
   speed,
+  extrusionDepth,
 }: {
   url: string
   trim: { start: number; end: number } | null
@@ -136,6 +141,7 @@ function PlaneVideo({
   scrubTime?: number | null
   playbackMode: 'normal' | 'fitScene'
   speed: number
+  extrusionDepth: number
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
   const [texture, setTexture] = useState<THREE.VideoTexture | null>(null)
@@ -201,15 +207,203 @@ function PlaneVideo({
   })
 
   if (!texture) return null
-  // Size plane by video aspect so it's not squashed (max width ~1.8, height by aspect)
-  const baseSize = 1.2
-  const scaleX = videoAspect >= 1 ? baseSize : baseSize * videoAspect
-  const scaleY = videoAspect >= 1 ? baseSize / videoAspect : baseSize
+  const scaleX = videoAspect >= 1 ? BASE_PLANE_SIZE : BASE_PLANE_SIZE * videoAspect
+  const scaleY = videoAspect >= 1 ? BASE_PLANE_SIZE / videoAspect : BASE_PLANE_SIZE
+  const depth = Math.max(0, extrusionDepth)
   return (
-    <mesh ref={meshRef} position={[0, 0, 0]} scale={[scaleX, scaleY, 1]}>
-      <planeGeometry args={[1, 1]} />
+    <mesh ref={meshRef} position={[0, 0, 0]} scale={[scaleX, scaleY, depth > 0 ? depth : 1]}>
+      {depth > 0 ? (
+        <boxGeometry args={[1, 1, 1]} />
+      ) : (
+        <planeGeometry args={[1, 1]} />
+      )}
       <meshBasicMaterial map={texture} side={THREE.DoubleSide} />
     </mesh>
+  )
+}
+
+function PlaneImage({
+  url,
+  extrusionDepth,
+}: {
+  url: string
+  extrusionDepth: number
+}) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  const textureRef = useRef<THREE.Texture | null>(null)
+  const [texture, setTexture] = useState<THREE.Texture | null>(null)
+  const [imageAspect, setImageAspect] = useState<number>(16 / 9)
+
+  useEffect(() => {
+    let cancelled = false
+    const loader = new THREE.TextureLoader()
+    loader.load(
+      url,
+      (tex) => {
+        if (cancelled) {
+          tex.dispose()
+          return
+        }
+        tex.colorSpace = THREE.SRGBColorSpace
+        tex.minFilter = THREE.LinearFilter
+        tex.magFilter = THREE.LinearFilter
+        textureRef.current = tex
+        setTexture(tex)
+        const img = tex.image as HTMLImageElement
+        if (img?.naturalWidth && img.naturalHeight) {
+          setImageAspect(img.naturalWidth / img.naturalHeight)
+        }
+      },
+      undefined,
+      () => {
+        if (!cancelled) setTexture(null)
+      }
+    )
+    return () => {
+      cancelled = true
+      textureRef.current?.dispose()
+      textureRef.current = null
+      setTexture(null)
+    }
+  }, [url])
+
+  if (!texture) return null
+  const scaleX = imageAspect >= 1 ? BASE_PLANE_SIZE : BASE_PLANE_SIZE * imageAspect
+  const scaleY = imageAspect >= 1 ? BASE_PLANE_SIZE / imageAspect : BASE_PLANE_SIZE
+  const depth = Math.max(0, extrusionDepth)
+  return (
+    <mesh ref={meshRef} position={[0, 0, 0]} scale={[scaleX, scaleY, depth > 0 ? depth : 1]}>
+      {depth > 0 ? (
+        <boxGeometry args={[1, 1, 1]} />
+      ) : (
+        <planeGeometry args={[1, 1]} />
+      )}
+      <meshBasicMaterial
+        map={texture}
+        side={THREE.DoubleSide}
+        transparent
+        alphaTest={0.01}
+        depthWrite={true}
+      />
+    </mesh>
+  )
+}
+
+function PlaneSVG({
+  url,
+  extrusionDepth,
+  colorOverride,
+}: {
+  url: string
+  extrusionDepth: number
+  colorOverride?: string | null
+}) {
+  const groupRef = useRef<THREE.Group>(null)
+  const [svgState, setSvgState] = useState<{
+    meshes: Array<{
+      geometry: THREE.BufferGeometry
+      material: THREE.Material
+      position: [number, number, number]
+    }>
+    scale: number
+  } | null>(null)
+  const meshesRef = useRef<typeof svgState>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const loader = new SVGLoader()
+    loader.load(
+      url,
+      (data) => {
+        if (cancelled) return
+        if (meshesRef.current?.meshes) {
+          meshesRef.current.meshes.forEach(({ geometry, material }) => {
+            geometry.dispose()
+            material.dispose()
+          })
+          meshesRef.current = null
+        }
+        const paths: Array<{ shapes: THREE.Shape[]; color: THREE.Color }> = []
+        for (const path of data.paths) {
+          const shapes = path.toShapes(true)
+          if (shapes.length > 0) {
+            paths.push({ shapes, color: path.color.clone() })
+          }
+        }
+        const svg = data.xml
+        let viewBox = { minX: 0, minY: 0, width: 100, height: 100 }
+        const vb = svg.getAttribute('viewBox')
+        if (vb) {
+          const parts = vb.split(/\s+/).map(Number)
+          if (parts.length >= 4 && parts.every(Number.isFinite)) {
+            viewBox = { minX: parts[0], minY: parts[1], width: parts[2], height: parts[3] }
+          }
+        } else if (svg.hasAttribute('width') && svg.hasAttribute('height')) {
+          viewBox.width = parseFloat(svg.getAttribute('width')!) || 100
+          viewBox.height = parseFloat(svg.getAttribute('height')!) || 100
+        }
+        const vbW = viewBox.width || 1
+        const vbH = viewBox.height || 1
+        const scale = (BASE_PLANE_SIZE * 0.8) / Math.max(vbW, vbH)
+        const offsetX = -viewBox.minX - vbW / 2
+        const offsetY = -viewBox.minY - vbH / 2
+        const depth = Math.max(0, extrusionDepth)
+        const overrideColor =
+          colorOverride != null && colorOverride !== ''
+            ? new THREE.Color(colorOverride)
+            : null
+        const built: Array<{
+          geometry: THREE.BufferGeometry
+          material: THREE.Material
+          position: [number, number, number]
+        }> = []
+        for (const { shapes, color } of paths) {
+          const geometry =
+            depth > 0
+              ? new THREE.ExtrudeGeometry(shapes, { depth: depth * 0.5, bevelEnabled: false })
+              : new THREE.ShapeGeometry(shapes)
+          const material = new THREE.MeshBasicMaterial({
+            color: overrideColor ?? color,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 1,
+            alphaTest: 0.01,
+          })
+          built.push({
+            geometry,
+            material,
+            position: [offsetX, offsetY, depth > 0 ? -depth * 0.25 : 0],
+          })
+        }
+        const state = { meshes: built, scale }
+        meshesRef.current = state
+        setSvgState(state)
+      },
+      undefined,
+      () => {
+        if (!cancelled) setSvgState(null)
+      }
+    )
+    return () => {
+      cancelled = true
+      if (meshesRef.current?.meshes) {
+        meshesRef.current.meshes.forEach(({ geometry, material }) => {
+          geometry.dispose()
+          material.dispose()
+        })
+        meshesRef.current = null
+      }
+    }
+  }, [url, extrusionDepth, colorOverride])
+
+  if (!svgState || svgState.meshes.length === 0) return null
+  const { meshes, scale } = svgState
+  return (
+    <group ref={groupRef} position={[0, 0, 0]} scale={[scale, -scale, 1]}>
+      {meshes.map(({ geometry, material, position }, i) => (
+        <mesh key={i} geometry={geometry} material={material} position={position} />
+      ))}
+    </group>
   )
 }
 
@@ -635,17 +829,38 @@ function SceneContent() {
             <meshBasicMaterial color="#1a1a1a" side={THREE.DoubleSide} />
           </mesh>
         ))}
-      {project.planeVideoUrl ? (
-        <PlaneVideo
-          url={project.planeVideoUrl}
-          trim={scene.planeTrim}
-          sceneLocalTime={sceneLocalTime}
-          sceneDuration={sceneDuration}
-          scrubTime={trimScrub?.video === 'plane' ? trimScrub.time : null}
-          playbackMode={scene.planeVideoPlaybackMode ?? 'normal'}
-          speed={scene.planeVideoSpeed ?? 1}
-        />
-      ) : null}
+      {(() => {
+        const planeMedia = getPlaneMedia(project)
+        const extrusion = project.planeExtrusionDepth ?? 0
+        if (!planeMedia) return null
+        if (planeMedia.type === 'video') {
+          return (
+            <PlaneVideo
+              url={planeMedia.url}
+              trim={scene.planeTrim}
+              sceneLocalTime={sceneLocalTime}
+              sceneDuration={sceneDuration}
+              scrubTime={trimScrub?.video === 'plane' ? trimScrub.time : null}
+              playbackMode={scene.planeVideoPlaybackMode ?? 'normal'}
+              speed={scene.planeVideoSpeed ?? 1}
+              extrusionDepth={extrusion}
+            />
+          )
+        }
+        if (planeMedia.type === 'image') {
+          return <PlaneImage url={planeMedia.url} extrusionDepth={extrusion} />
+        }
+        if (planeMedia.type === 'svg') {
+          return (
+            <PlaneSVG
+              url={planeMedia.url}
+              extrusionDepth={extrusion}
+              colorOverride={project.planeSvgColor}
+            />
+          )
+        }
+        return null
+      })()}
       <EffectComposer>
         {dofEnabled ? (
           <DepthOfField

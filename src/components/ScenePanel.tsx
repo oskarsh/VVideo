@@ -2,6 +2,14 @@ import { useState } from 'react'
 import { useStore } from '@/store'
 import { VideoThumbnail } from './VideoThumbnail'
 import { TrimEditorModal } from './TrimEditorModal'
+import { getPlaneMedia } from '@/types'
+
+function getPlaneMediaTypeFromFile(file: File): 'video' | 'image' | 'svg' {
+  if (file.type.startsWith('video/')) return 'video'
+  if (file.type === 'image/svg+xml' || file.name?.toLowerCase().endsWith('.svg')) return 'svg'
+  if (file.type.startsWith('image/')) return 'image'
+  return 'image'
+}
 
 export function ScenePanel() {
   const [trimEditor, setTrimEditor] = useState<'background' | 'plane' | null>(null)
@@ -10,6 +18,9 @@ export function ScenePanel() {
   const clearScene = useStore((s) => s.clearScene)
   const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
   const setProjectPlaneVideo = useStore((s) => s.setProjectPlaneVideo)
+  const setProjectPlaneMedia = useStore((s) => s.setProjectPlaneMedia)
+  const setProjectPlaneExtrusionDepth = useStore((s) => s.setProjectPlaneExtrusionDepth)
+  const setProjectPlaneSvgColor = useStore((s) => s.setProjectPlaneSvgColor)
   const setBackgroundTrim = useStore((s) => s.setBackgroundTrim)
   const setPlaneTrim = useStore((s) => s.setPlaneTrim)
   const setProjectAspectRatio = useStore((s) => s.setProjectAspectRatio)
@@ -19,6 +30,8 @@ export function ScenePanel() {
   const aspectRatio = project.aspectRatio
   const is16x9 = aspectRatio[0] === 16 && aspectRatio[1] === 9
   const is9x16 = aspectRatio[0] === 9 && aspectRatio[1] === 16
+  const planeMedia = getPlaneMedia(project)
+  const planeIsVideo = planeMedia?.type === 'video'
 
   const handleFile = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -31,8 +44,15 @@ export function ScenePanel() {
       setProjectBackgroundVideo(url)
       setBackgroundTrim(currentSceneIndex, null)
     } else {
-      setProjectPlaneVideo(url)
-      setPlaneTrim(currentSceneIndex, null)
+      const mediaType = getPlaneMediaTypeFromFile(file)
+      setProjectPlaneMedia(
+        mediaType === 'video'
+          ? { type: 'video', url }
+          : mediaType === 'svg'
+            ? { type: 'svg', url }
+            : { type: 'image', url }
+      )
+      if (mediaType === 'video') setPlaneTrim(currentSceneIndex, null)
     }
     e.target.value = ''
   }
@@ -97,27 +117,99 @@ export function ScenePanel() {
         </div>
         <div>
           <span className="text-xs text-white/60 block mb-1">Panel</span>
-          {project.planeVideoUrl ? (
+          {planeMedia ? (
             <div className="space-y-1.5">
-              <VideoThumbnail
-                url={project.planeVideoUrl}
-                time={scene?.planeTrim?.start ?? 0}
-                className="border border-white/10"
-              />
+              {planeMedia.type === 'video' ? (
+                <VideoThumbnail
+                  url={planeMedia.url}
+                  time={scene?.planeTrim?.start ?? 0}
+                  className="border border-white/10"
+                />
+              ) : (
+                <div className="relative aspect-video w-full overflow-hidden rounded bg-black/40 border border-white/10">
+                  <img
+                    src={planeMedia.url}
+                    alt=""
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              )}
               <input
                 type="file"
-                accept="video/*"
+                accept="video/*,image/*,image/svg+xml,.svg"
                 onChange={(e) => handleFile(e, 'plane')}
                 className="block w-full text-sm text-white/80 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white/10 file:text-white"
               />
+              <label className="block text-xs text-white/60">
+                Extrusion
+                <input
+                  type="range"
+                  min={0}
+                  max={0.3}
+                  step={0.01}
+                  value={project.planeExtrusionDepth ?? 0}
+                  onChange={(e) =>
+                    setProjectPlaneExtrusionDepth(parseFloat(e.target.value))
+                  }
+                  className="block w-full mt-0.5"
+                />
+                <span className="text-white/50">
+                  {(project.planeExtrusionDepth ?? 0).toFixed(2)}
+                </span>
+              </label>
+              {planeMedia.type === 'svg' && (
+                <label className="block text-xs text-white/60">
+                  Color
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <input
+                      type="color"
+                      value={project.planeSvgColor ?? '#ffffff'}
+                      onChange={(e) =>
+                        setProjectPlaneSvgColor(e.target.value)
+                      }
+                      className="w-8 h-6 rounded border border-white/20 cursor-pointer bg-transparent"
+                    />
+                    <input
+                      type="text"
+                      value={project.planeSvgColor ?? ''}
+                      placeholder="SVG colors"
+                      onChange={(e) => {
+                        const v = e.target.value.trim()
+                        setProjectPlaneSvgColor(v === '' ? null : v)
+                      }}
+                      className="flex-1 min-w-0 px-1.5 py-1 rounded bg-black/30 border border-white/10 text-white/90 text-xs font-mono"
+                    />
+                    {(project.planeSvgColor != null && project.planeSvgColor !== '') && (
+                      <button
+                        type="button"
+                        onClick={() => setProjectPlaneSvgColor(null)}
+                        className="text-xs text-white/50 hover:text-white shrink-0"
+                        title="Use SVG’s own colors"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </label>
+              )}
+              <button
+                type="button"
+                onClick={() => setProjectPlaneMedia(null)}
+                className="text-xs text-white/50 hover:text-white"
+              >
+                Clear panel
+              </button>
             </div>
           ) : (
-            <input
-              type="file"
-              accept="video/*"
-              onChange={(e) => handleFile(e, 'plane')}
-              className="block w-full text-sm text-white/80 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white/10 file:text-white"
-            />
+            <>
+              <input
+                type="file"
+                accept="video/*,image/*,image/svg+xml,.svg"
+                onChange={(e) => handleFile(e, 'plane')}
+                className="block w-full text-sm text-white/80 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white/10 file:text-white"
+              />
+              <p className="text-xs text-white/40 mt-1">Video, image or SVG</p>
+            </>
           )}
         </div>
         </div>
@@ -239,7 +331,7 @@ export function ScenePanel() {
                 )}
               </div>
             )}
-            {project.planeVideoUrl && (
+            {planeMedia && planeIsVideo && (
               <div className="pl-2 border-l-2 border-white/10 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-white/50">Panel trim</span>
@@ -372,10 +464,10 @@ export function ScenePanel() {
           onClose={() => setTrimEditor(null)}
         />
       )}
-      {trimEditor === 'plane' && scene && project.planeVideoUrl && (
+      {trimEditor === 'plane' && scene && planeIsVideo && planeMedia && (
         <TrimEditorModal
           title="Panel trim"
-          videoUrl={project.planeVideoUrl}
+          videoUrl={planeMedia.url}
           initialTrim={scene.planeTrim}
           sceneDuration={scene.durationSeconds}
           videoType="plane"
