@@ -1,5 +1,5 @@
 import type { Project, Scene } from '@/types'
-import { createDefaultScene, DEFAULT_ASPECT } from '@/types'
+import { createDefaultScene, DEFAULT_ASPECT, DEFAULT_DITHER } from '@/types'
 
 const PRESETS_STORAGE_KEY = 'vvideo_presets'
 
@@ -19,6 +19,7 @@ export function projectForPreset(project: Project): Project {
     aspectRatio: project.aspectRatio,
     backgroundVideoUrl: null,
     planeVideoUrl: null,
+    dither: project.dither ?? DEFAULT_DITHER,
     scenes: project.scenes.map((s) => ({ ...s })),
   }
 }
@@ -32,6 +33,7 @@ export function applyPreset(preset: Preset, currentProject: Project): Project {
     aspectRatio: preset.project.aspectRatio,
     backgroundVideoUrl: currentProject.backgroundVideoUrl,
     planeVideoUrl: currentProject.planeVideoUrl,
+    dither: preset.project.dither ?? currentProject.dither ?? DEFAULT_DITHER,
     scenes: preset.project.scenes.map((s, i) => {
       const existing = currentProject.scenes[i]
       return {
@@ -51,16 +53,6 @@ function buildDefaultPresets(): Preset[] {
     const s = { ...baseScene, id: crypto.randomUUID() }
     return typeof patch === 'function' ? patch(s) : { ...s, ...patch }
   }
-
-  const setDither = (enabled: boolean, preset: 'subtle' | 'medium' | 'strong' = 'medium', levels = 8, intensity = 1) =>
-    (sc: Scene) => ({
-      ...sc,
-      effects: sc.effects.map((e) =>
-        e.type === 'dither'
-          ? { ...e, enabled, preset, levels, intensity: intensity ?? (e as { intensity?: number }).intensity ?? 1 }
-          : e
-      ),
-    })
 
   const setGrain = (opacity: number) =>
     (sc: Scene) => ({
@@ -126,7 +118,6 @@ function buildDefaultPresets(): Preset[] {
   const scene3 = compose(
     setGrain(0.25),
     setDoF(false),
-    setDither(true, 'strong', 4, 0.9),
     setChromatic(true, 0.012),
     setScanline(true, 2, 0.3),
     setVignette(true, 0.45, 0.55)
@@ -140,16 +131,19 @@ function buildDefaultPresets(): Preset[] {
 
   const scene5 = compose(
     setGrain(0.18),
-    setDither(true, 'strong', 4, 1),
     setVignette(true, 0.4, 0.75)
   )(sceneWith({}))
 
+  const ditherOff = { ...DEFAULT_DITHER }
+  const ditherVhs = { ...DEFAULT_DITHER, enabled: true, preset: 'strong' as const, levels: 4, intensity: 0.9 }
+  const ditherContrast = { ...DEFAULT_DITHER, enabled: true, preset: 'strong' as const, levels: 4, intensity: 1 }
+
   return [
-    { id: 'preset-clean', name: 'Clean', project: { id: 'p1', name: 'Clean', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, scenes: [scene1] } },
-    { id: 'preset-cinematic', name: 'Cinematic', project: { id: 'p2', name: 'Cinematic', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, scenes: [scene2] } },
-    { id: 'preset-vhs', name: 'VHS / Retro', project: { id: 'p3', name: 'VHS', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, scenes: [scene3] } },
-    { id: 'preset-glitch', name: 'Glitch', project: { id: 'p4', name: 'Glitch', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, scenes: [scene4] } },
-    { id: 'preset-contrast', name: 'High contrast', project: { id: 'p5', name: 'High contrast', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, scenes: [scene5] } },
+    { id: 'preset-clean', name: 'Clean', project: { id: 'p1', name: 'Clean', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, dither: ditherOff, scenes: [scene1] } },
+    { id: 'preset-cinematic', name: 'Cinematic', project: { id: 'p2', name: 'Cinematic', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, dither: ditherOff, scenes: [scene2] } },
+    { id: 'preset-vhs', name: 'VHS / Retro', project: { id: 'p3', name: 'VHS', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, dither: ditherVhs, scenes: [scene3] } },
+    { id: 'preset-glitch', name: 'Glitch', project: { id: 'p4', name: 'Glitch', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, dither: ditherOff, scenes: [scene4] } },
+    { id: 'preset-contrast', name: 'High contrast', project: { id: 'p5', name: 'High contrast', aspectRatio: DEFAULT_ASPECT, backgroundVideoUrl: null, planeVideoUrl: null, dither: ditherContrast, scenes: [scene5] } },
   ]
 }
 

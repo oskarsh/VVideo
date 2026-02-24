@@ -15,6 +15,7 @@ import * as THREE from 'three'
 import { useStore } from '@/store'
 import { setFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyKeys, setFlyKey, isFlyKey } from '@/flyKeys'
+import { applyFlyoverEasing } from '@/easing'
 import { DitherEffect } from '@/effects/DitherEffect'
 import { LensDistortion } from '@/effects/LensDistortionEffect'
 import type {
@@ -229,6 +230,7 @@ function CameraRig({
   const zoom = zoomStart + (zoomEnd - zoomStart) * t
   const flyover = sceneData.flyover
   const flyEnabled = flyover?.enabled && flyover.start && flyover.end
+  const easedT = applyFlyoverEasing(t, flyover?.easing)
 
   const handheldEffect = sceneData.effects.find(
     (e): e is SceneEffectHandheld => e.type === 'handheld'
@@ -259,16 +261,16 @@ function CameraRig({
       const s = flyover.start
       const e = flyover.end
       pos = [
-        s.position[0] + (e.position[0] - s.position[0]) * t,
-        s.position[1] + (e.position[1] - s.position[1]) * t,
-        s.position[2] + (e.position[2] - s.position[2]) * t,
+        s.position[0] + (e.position[0] - s.position[0]) * easedT,
+        s.position[1] + (e.position[1] - s.position[1]) * easedT,
+        s.position[2] + (e.position[2] - s.position[2]) * easedT,
       ]
       rot = [
-        s.rotation[0] + (e.rotation[0] - s.rotation[0]) * t,
-        s.rotation[1] + (e.rotation[1] - s.rotation[1]) * t,
-        s.rotation[2] + (e.rotation[2] - s.rotation[2]) * t,
+        s.rotation[0] + (e.rotation[0] - s.rotation[0]) * easedT,
+        s.rotation[1] + (e.rotation[1] - s.rotation[1]) * easedT,
+        s.rotation[2] + (e.rotation[2] - s.rotation[2]) * easedT,
       ]
-      fov = (s.fov ?? FOV_DEG) + ((e.fov ?? FOV_DEG) - (s.fov ?? FOV_DEG)) * t
+      fov = (s.fov ?? FOV_DEG) + ((e.fov ?? FOV_DEG) - (s.fov ?? FOV_DEG)) * easedT
     } else {
       const s = flyover?.start ?? { position: [0, 0, 5], rotation: [0, 0, 0] }
       pos = s.position
@@ -301,10 +303,15 @@ function CameraRig({
   return null
 }
 
+const CAMERA_EPS = 1e-4
+const FOV_EPS = 0.5
+
 function FlyoverEditSync() {
   const { camera } = useThree()
   const scene = useStore((s) => s.project.scenes[s.currentSceneIndex])
+  const setStoreCamera = useStore((s) => s.setFlyoverEditCamera)
   const justEnabled = useRef(true)
+  const lastStored = useRef<{ position: [number, number, number]; rotation: [number, number, number]; fov: number } | null>(null)
 
   useFrame(() => {
     if (!camera || !('fov' in camera)) return
@@ -323,11 +330,24 @@ function FlyoverEditSync() {
         justEnabled.current = false
       }
     }
-    setFlyoverEditCamera({
-      position: [camera.position.x, camera.position.y, camera.position.z],
-      rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z],
-      fov: camera.fov,
-    })
+    const pos: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z]
+    const rot: [number, number, number] = [camera.rotation.x, camera.rotation.y, camera.rotation.z]
+    const fov = camera.fov
+    setFlyoverEditCamera({ position: pos, rotation: rot, fov })
+    const prev = lastStored.current
+    const changed =
+      !prev ||
+      Math.abs(pos[0] - prev.position[0]) > CAMERA_EPS ||
+      Math.abs(pos[1] - prev.position[1]) > CAMERA_EPS ||
+      Math.abs(pos[2] - prev.position[2]) > CAMERA_EPS ||
+      Math.abs(rot[0] - prev.rotation[0]) > CAMERA_EPS ||
+      Math.abs(rot[1] - prev.rotation[1]) > CAMERA_EPS ||
+      Math.abs(rot[2] - prev.rotation[2]) > CAMERA_EPS ||
+      Math.abs(fov - prev.fov) > FOV_EPS
+    if (changed) {
+      lastStored.current = { position: pos, rotation: rot, fov }
+      setStoreCamera({ position: pos, rotation: rot, fov })
+    }
   })
   return null
 }
@@ -466,7 +486,7 @@ function SceneContent() {
     d?.bokehScaleEnd ?? (d as { bokehScale?: number })?.bokehScale ?? 6
   )
 
-  const ditherEffect = scene.effects.find((e): e is SceneEffectDither => e.type === 'dither')
+  const ditherEffect = project.dither ?? scene.effects.find((e): e is SceneEffectDither => e.type === 'dither')
   const ditherEnabled = ditherEffect?.enabled ?? false
   const ditherPreset = ditherEffect?.preset ?? 'medium'
   const ditherMode = ditherEffect?.mode ?? 'bayer4'

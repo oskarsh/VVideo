@@ -6,11 +6,105 @@ export interface TrimRange {
   end: number
 }
 
+function useAudioWaveform(videoUrl: string | null, duration: number) {
+  const [waveformData, setWaveformData] = useState<Float32Array | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!videoUrl || duration <= 0) {
+      setWaveformData(null)
+      setError(null)
+      return
+    }
+    let cancelled = false
+    setError(null)
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    fetch(videoUrl, { mode: 'cors' })
+      .then((r) => r.arrayBuffer())
+      .then((buf) => ctx.decodeAudioData(buf))
+      .then((buffer) => {
+        if (cancelled) return
+        const ch = buffer.getChannelData(0)
+        const samples = Math.min(ch.length, 4096)
+        const step = Math.floor(ch.length / samples)
+        const peaks = new Float32Array(samples)
+        for (let i = 0; i < samples; i++) {
+          let sum = 0
+          const start = i * step
+          const end = Math.min(start + step, ch.length)
+          for (let j = start; j < end; j++) sum += Math.abs(ch[j])
+          peaks[i] = end > start ? sum / (end - start) : 0
+        }
+        setWaveformData(peaks)
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e?.message ?? 'No audio')
+      })
+    return () => {
+      cancelled = true
+      ctx.close()
+    }
+  }, [videoUrl, duration])
+
+  return { waveformData, error }
+}
+
+function WaveformCanvas({
+  waveformData,
+  duration,
+  trim,
+  width,
+  height,
+  className,
+}: {
+  waveformData: Float32Array | null
+  duration: number
+  trim: TrimRange
+  width: number
+  height: number
+  className?: string
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || duration <= 0 || width < 1) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = width * dpr
+    canvas.height = height * dpr
+    ctx.scale(dpr, dpr)
+    const w = width
+    const h = height
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'
+    ctx.fillRect(0, 0, w, h)
+    if (!waveformData || waveformData.length < 2) {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)'
+      ctx.fillRect(0, h / 2 - 1, w, 2)
+      return
+    }
+    const startPx = (trim.start / duration) * w
+    const endPx = (trim.end / duration) * w
+    const midY = h / 2
+    const barWidth = Math.max(1, w / waveformData.length)
+    for (let i = 0; i < waveformData.length; i++) {
+      const x = (i / waveformData.length) * w
+      const inRange = x >= startPx && x <= endPx
+      ctx.fillStyle = inRange ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)'
+      const amp = waveformData[i] * midY * 0.9
+      ctx.fillRect(x, midY - amp, barWidth + 0.5, amp * 2)
+    }
+  }, [waveformData, duration, trim, width, height])
+
+  return <canvas ref={canvasRef} width={width} height={height} className={className} style={{ width, height }} />
+}
+
 export function TrimEditorModal({
   title,
   videoUrl,
   initialTrim,
-  sceneDuration,
+  sceneDuration: _sceneDuration,
   videoType,
   onApply,
   onClose,
@@ -25,19 +119,19 @@ export function TrimEditorModal({
 }) {
   const setTrimScrub = useStore((s) => s.setTrimScrub)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
   const [duration, setDuration] = useState<number>(0)
   const [trim, setTrim] = useState<TrimRange>(() =>
-    initialTrim
-      ? { start: initialTrim.start, end: initialTrim.end }
-      : { start: 0, end: 0 }
+    initialTrim ? { start: initialTrim.start, end: initialTrim.end } : { start: 0, end: 0 }
   )
   const [playing, setPlaying] = useState(false)
   const [previewTime, setPreviewTime] = useState(0)
+  const [dragging, setDragging] = useState<'start' | 'end' | null>(null)
+  const { waveformData } = useAudioWaveform(videoUrl, duration)
 
   useEffect(() => {
     const video = videoRef.current
     if (!video || !videoUrl) return
-
     const onLoadedMetadata = () => {
       const d = video.duration
       setDuration(d)
@@ -48,12 +142,10 @@ export function TrimEditorModal({
         setPreviewTime(initialTrim.start)
       }
     }
-
     video.src = videoUrl
     video.muted = true
     video.playsInline = true
     video.crossOrigin = 'anonymous'
-
     video.addEventListener('loadedmetadata', onLoadedMetadata)
     return () => {
       video.removeEventListener('loadedmetadata', onLoadedMetadata)
@@ -61,15 +153,10 @@ export function TrimEditorModal({
     }
   }, [videoUrl, initialTrim])
 
-  // Sync trim from initial when duration becomes known and seek video to start
   useEffect(() => {
     if (duration <= 0) return
-    const start = initialTrim
-      ? Math.min(initialTrim.start, duration)
-      : 0
-    const end = initialTrim
-      ? Math.min(initialTrim.end, duration)
-      : duration
+    const start = initialTrim ? Math.min(initialTrim.start, duration) : 0
+    const end = initialTrim ? Math.min(initialTrim.end, duration) : duration
     setTrim({ start, end })
     setTrimScrub({ video: videoType, time: start })
     const video = videoRef.current
@@ -79,71 +166,85 @@ export function TrimEditorModal({
     }
   }, [duration, initialTrim, videoType, setTrimScrub])
 
-  // Scrub main canvas: set on open, clear on close
   useEffect(() => {
     setTrimScrub({ video: videoType, time: trim.start })
     return () => setTrimScrub(null)
   }, [videoType, setTrimScrub])
 
-  const clampTrim = useCallback(() => {
-    setTrim((t) => ({
-      start: Math.max(0, Math.min(t.start, duration)),
-      end: Math.max(0, Math.min(t.end, duration)),
-    }))
-  }, [duration])
+  const scrubTo = useCallback(
+    (t: number) => {
+      const clamped = Math.max(0, Math.min(t, duration))
+      setTrimScrub({ video: videoType, time: clamped })
+      const v = videoRef.current
+      if (v) {
+        v.currentTime = clamped
+        setPreviewTime(clamped)
+      }
+    },
+    [duration, videoType, setTrimScrub]
+  )
 
-  const handleStartChange = (v: number) => {
-    const newStart = Math.max(0, Math.min(v, duration))
-    setTrim((t) => ({ ...t, start: Math.max(0, Math.min(v, t.end)) }))
-    setTrimScrub({ video: videoType, time: newStart })
-    const vEl = videoRef.current
-    if (vEl) {
-      vEl.currentTime = newStart
-      setPreviewTime(newStart)
-    }
-  }
-  const handleEndChange = (v: number) => {
-    const newEnd = Math.max(0, Math.min(v, duration))
-    setTrim((t) => ({ ...t, end: Math.max(t.start, Math.min(v, duration)) }))
-    setTrimScrub({ video: videoType, time: newEnd })
-    const vEl = videoRef.current
-    if (vEl) {
-      vEl.currentTime = newEnd
-      setPreviewTime(newEnd)
-    }
-  }
-  const handleEndSliderRelease = useCallback(() => {
+  const handleStartChange = useCallback(
+    (v: number) => {
+      const newStart = Math.max(0, Math.min(v, duration))
+      setTrim((t) => ({ ...t, start: Math.min(newStart, t.end - 0.05) }))
+      scrubTo(newStart)
+    },
+    [duration, scrubTo]
+  )
+
+  const handleEndChange = useCallback(
+    (v: number) => {
+      const newEnd = Math.max(0, Math.min(v, duration))
+      setTrim((t) => ({ ...t, end: Math.max(newEnd, t.start + 0.05) }))
+      scrubTo(newEnd)
+    },
+    [duration, scrubTo]
+  )
+
+  const handleEndDragRelease = useCallback(() => {
     setTrimScrub({ video: videoType, time: trim.start })
-    const vEl = videoRef.current
-    if (vEl) {
-      vEl.currentTime = trim.start
-      setPreviewTime(trim.start)
-    }
-  }, [videoType, trim.start, setTrimScrub])
-
-  const seekToStart = () => {
     const v = videoRef.current
     if (v) {
       v.currentTime = trim.start
       setPreviewTime(trim.start)
-      setPlaying(false)
-      v.pause()
     }
-  }
-  const seekToEnd = () => {
-    const v = videoRef.current
-    if (v) {
-      v.currentTime = trim.end
-      setPreviewTime(trim.end)
-      setPlaying(false)
-      v.pause()
+  }, [videoType, trim.start, setTrimScrub])
+
+  const pxToTime = useCallback(
+    (px: number) => {
+      const track = trackRef.current
+      if (!track || duration <= 0) return 0
+      const rect = track.getBoundingClientRect()
+      const x = px - rect.left
+      const t = (x / rect.width) * duration
+      return Math.max(0, Math.min(t, duration))
+    },
+    [duration]
+  )
+
+  useEffect(() => {
+    if (dragging === null) return
+    const onMove = (e: PointerEvent) => {
+      const t = pxToTime(e.clientX)
+      if (dragging === 'start') handleStartChange(t)
+      else handleEndChange(t)
     }
-  }
+    const onUp = () => {
+      if (dragging === 'end') handleEndDragRelease()
+      setDragging(null)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [dragging, pxToTime, handleStartChange, handleEndChange, handleEndDragRelease])
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-
     const onTimeUpdate = () => {
       setPreviewTime(video.currentTime)
       if (video.currentTime >= trim.end) {
@@ -157,7 +258,6 @@ export function TrimEditorModal({
       setPlaying(false)
       video.currentTime = trim.start
     }
-
     video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('play', onPlay)
     video.addEventListener('pause', onPause)
@@ -183,6 +283,21 @@ export function TrimEditorModal({
     return m > 0 ? `${m}:${sec.padStart(4, '0')}` : `${sec}s`
   }
 
+  const waveformContainerRef = useRef<HTMLDivElement>(null)
+  const [waveformWidth, setWaveformWidth] = useState(400)
+  useEffect(() => {
+    const el = waveformContainerRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      setWaveformWidth(entries[0]?.contentRect.width ?? 400)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const startPercent = duration > 0 ? (trim.start / duration) * 100 : 0
+  const endPercent = duration > 0 ? (trim.end / duration) * 100 : 100
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
@@ -194,26 +309,14 @@ export function TrimEditorModal({
       >
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-white/50 hover:text-white p-1"
-            aria-label="Close"
-          >
+          <button type="button" onClick={onClose} className="text-white/50 hover:text-white p-1" aria-label="Close">
             ✕
           </button>
         </div>
 
         <div className="p-4 flex-1 min-h-0 flex flex-col gap-4">
           <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-            <video
-              ref={videoRef}
-              className="w-full h-full object-contain"
-              muted
-              playsInline
-              loop={false}
-              onTimeUpdate={() => { }}
-            />
+            <video ref={videoRef} className="w-full h-full object-contain" muted playsInline loop={false} onTimeUpdate={() => {}} />
             <div className="absolute bottom-2 left-2 right-2 flex justify-between text-xs text-white/80">
               <span>{formatTime(previewTime)}</span>
               <span>Trim: {formatTime(trim.start)} – {formatTime(trim.end)}</span>
@@ -223,12 +326,9 @@ export function TrimEditorModal({
               onClick={() => {
                 const v = videoRef.current
                 if (!v) return
-                if (playing) {
-                  v.pause()
-                } else {
-                  if (v.currentTime < trim.start || v.currentTime >= trim.end) {
-                    v.currentTime = trim.start
-                  }
+                if (playing) v.pause()
+                else {
+                  if (v.currentTime < trim.start || v.currentTime >= trim.end) v.currentTime = trim.start
                   v.play()
                 }
               }}
@@ -239,101 +339,63 @@ export function TrimEditorModal({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <label className="text-xs text-white/70">
-              Start (s)
-              <input
-                type="number"
-                min={0}
-                max={duration}
-                step={0.1}
-                value={trim.start.toFixed(1)}
-                onChange={(e) => handleStartChange(parseFloat(e.target.value) || 0)}
-                onBlur={clampTrim}
-                className="block w-full mt-1 px-2 py-1.5 rounded bg-black/30 border border-white/10 text-white"
-              />
-            </label>
-            <label className="text-xs text-white/70">
-              End (s)
-              <input
-                type="number"
-                min={0}
-                max={duration}
-                step={0.1}
-                value={trim.end.toFixed(1)}
-                onChange={(e) => handleEndChange(parseFloat(e.target.value) || duration)}
-                onBlur={() => {
-                  clampTrim()
-                  handleEndSliderRelease()
-                }}
-                className="block w-full mt-1 px-2 py-1.5 rounded bg-black/30 border border-white/10 text-white"
-              />
-            </label>
-          </div>
-
           <div className="space-y-2">
-            <div className="text-xs text-white/50">Timeline</div>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs text-white/70">
-                Start
-                <input
-                  type="range"
-                  min={0}
-                  max={duration || 1}
-                  step={0.05}
-                  value={trim.start}
-                  onChange={(e) => handleStartChange(parseFloat(e.target.value))}
-                  className="block w-full mt-1 h-2 accent-white"
+            <div className="text-xs text-white/50">Drag handles to set in / out</div>
+            <div className="relative">
+              <div
+                ref={trackRef}
+                className="h-10 w-full rounded-lg bg-white/5 border border-white/10 select-none"
+                role="slider"
+                aria-valuemin={0}
+                aria-valuemax={duration}
+                aria-valuenow={previewTime}
+              />
+              <div className="absolute inset-0 h-10 pointer-events-none">
+                <div
+                  className="absolute top-0 bottom-0 rounded bg-white/10 border border-white/20 pointer-events-none"
+                  style={{ left: `${startPercent}%`, right: `${100 - endPercent}%` }}
                 />
-              </label>
-              <label className="text-xs text-white/70">
-                End
-                <input
-                  type="range"
-                  min={0}
-                  max={duration || 1}
-                  step={0.05}
-                  value={trim.end}
-                  onChange={(e) => handleEndChange(parseFloat(e.target.value))}
-                  onPointerUp={handleEndSliderRelease}
-                  onMouseUp={handleEndSliderRelease}
-                  className="block w-full mt-1 h-2 accent-amber-500"
-                />
-              </label>
+              </div>
+              <button
+                type="button"
+                className="absolute top-0 bottom-0 w-4 -ml-2 cursor-ew-resize rounded-l border-l-2 border-emerald-400 bg-emerald-500/30 hover:bg-emerald-500/50 touch-none z-10"
+                style={{ left: `${startPercent}%` }}
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  setDragging('start')
+                }}
+                aria-label="Trim start"
+              />
+              <button
+                type="button"
+                className="absolute top-0 bottom-0 w-4 -ml-2 cursor-ew-resize rounded-r border-r-2 border-amber-400 bg-amber-500/30 hover:bg-amber-500/50 touch-none z-10"
+                style={{ left: `${endPercent}%` }}
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  setDragging('end')
+                }}
+                aria-label="Trim end"
+              />
             </div>
-          </div>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={seekToStart}
-              className="text-xs px-2 py-1.5 rounded bg-white/10 text-white/80 hover:bg-white/20"
-            >
-              Go to start
-            </button>
-            <button
-              type="button"
-              onClick={seekToEnd}
-              className="text-xs px-2 py-1.5 rounded bg-white/10 text-white/80 hover:bg-white/20"
-            >
-              Go to end
-            </button>
+            <div ref={waveformContainerRef} className="h-12 w-full rounded bg-black/30 overflow-hidden">
+              <WaveformCanvas
+                waveformData={waveformData}
+                duration={duration}
+                trim={trim}
+                width={waveformWidth}
+                height={48}
+                className="w-full h-full block"
+              />
+            </div>
           </div>
         </div>
 
         <div className="px-4 py-3 border-t border-white/10 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 rounded text-sm text-white/80 hover:bg-white/10"
-          >
+          <button type="button" onClick={onClose} className="px-3 py-1.5 rounded text-sm text-white/80 hover:bg-white/10">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={handleApply}
-            className="px-3 py-1.5 rounded text-sm bg-white text-black hover:bg-white/90"
-          >
+          <button type="button" onClick={handleApply} className="px-3 py-1.5 rounded text-sm bg-white text-black hover:bg-white/90">
             Apply trim
           </button>
         </div>

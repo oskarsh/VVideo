@@ -219,10 +219,30 @@ export default function App() {
   )
 }
 
+const CAMERA_MATCH_EPS = 2e-4
+const FOV_MATCH_EPS = 1
+
+function cameraMatchesKeyframe(
+  cam: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null,
+  kf: { position: [number, number, number]; rotation: [number, number, number]; fov?: number } | undefined
+): boolean {
+  if (!cam || !kf?.position) return false
+  const [x, y, z] = cam.position
+  const [kx, ky, kz] = kf.position
+  if (Math.abs(x - kx) > CAMERA_MATCH_EPS || Math.abs(y - ky) > CAMERA_MATCH_EPS || Math.abs(z - kz) > CAMERA_MATCH_EPS) return false
+  const [rx, ry, rz] = cam.rotation
+  const [krx, kry, krz] = kf.rotation
+  if (Math.abs(rx - krx) > CAMERA_MATCH_EPS || Math.abs(ry - kry) > CAMERA_MATCH_EPS || Math.abs(rz - krz) > CAMERA_MATCH_EPS) return false
+  const kfFov = kf.fov ?? 50
+  if (Math.abs(cam.fov - kfFov) > FOV_MATCH_EPS) return false
+  return true
+}
+
 function CameraKeyframeButtons() {
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const scene = useStore((s) => s.project.scenes[currentSceneIndex])
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
+  const flyoverEditCamera = useStore((s) => s.flyoverEditCamera)
   const setFlyoverKeyframes = useStore((s) => s.setFlyoverKeyframes)
 
   if (!scene?.flyover) return null
@@ -239,6 +259,8 @@ function CameraKeyframeButtons() {
     (end.position[0] !== defaultPos[0] || end.position[1] !== defaultPos[1] || end.position[2] !== defaultPos[2] ||
       end.rotation.some((r, i) => r !== defaultRot[i]))
   )
+  const atStartPosition = flyoverEditMode && hasStart && cameraMatchesKeyframe(flyoverEditCamera, start)
+  const atEndPosition = flyoverEditMode && hasEnd && cameraMatchesKeyframe(flyoverEditCamera, end)
 
   const handleSetStart = () => {
     const cam = getFlyoverEditCamera()
@@ -271,12 +293,12 @@ function CameraKeyframeButtons() {
         title={flyoverEditMode ? 'Set current view as start keyframe' : 'Enable fly-around first'}
         className="flex flex-1 min-w-0 max-w-xs items-center justify-center gap-2 rounded-full border-2 py-2 px-5 text-sm font-medium text-white/80 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 bg-white/10 hover:bg-white/15 disabled:hover:bg-white/10 whitespace-nowrap"
         style={{
-          borderColor: hasStart ? accent : 'transparent',
+          borderColor: atStartPosition ? accent : 'transparent',
         }}
       >
         <span
           className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
-          style={{ backgroundColor: hasStart ? accent : 'rgba(255,255,255,0.4)' }}
+          style={{ backgroundColor: atStartPosition ? accent : 'rgba(255,255,255,0.4)' }}
         />
         {hasStart ? 'Start' : 'Set start'}
       </button>
@@ -287,12 +309,12 @@ function CameraKeyframeButtons() {
         title={flyoverEditMode ? 'Set current view as end keyframe' : 'Enable fly-around first'}
         className="flex flex-1 min-w-0 max-w-xs items-center justify-center gap-2 rounded-full border-2 py-2 px-5 text-sm font-medium text-white/80 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 bg-white/10 hover:bg-white/15 disabled:hover:bg-white/10 whitespace-nowrap"
         style={{
-          borderColor: hasEnd ? accent : 'transparent',
+          borderColor: atEndPosition ? accent : 'transparent',
         }}
       >
         <span
           className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
-          style={{ backgroundColor: hasEnd ? accent : 'rgba(255,255,255,0.4)' }}
+          style={{ backgroundColor: atEndPosition ? accent : 'rgba(255,255,255,0.4)' }}
         />
         {hasEnd ? 'End' : 'Set end'}
       </button>

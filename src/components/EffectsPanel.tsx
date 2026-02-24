@@ -147,19 +147,6 @@ export function EffectsPanel() {
               </div>
             </CollapsibleSection>
           )
-        if (eff.type === 'dither')
-          return (
-            <CollapsibleSection key={i} title="Dither" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2">
-                <DitherControls
-                  eff={eff as SceneEffectDither}
-                  sceneIndex={currentSceneIndex}
-                  effectIndex={i}
-                  setEffect={setEffect}
-                />
-              </div>
-            </CollapsibleSection>
-          )
         if (eff.type === 'chromaticAberration')
           return (
             <CollapsibleSection key={i} title="Chromatic aberration" defaultOpen={false}>
@@ -465,7 +452,7 @@ const DITHER_MODES: { value: SceneEffectDither['mode']; label: string }[] = [
   { value: 'random', label: 'Random' },
 ]
 
-function DitherControls({
+export function DitherControls({
   eff,
   sceneIndex,
   effectIndex,

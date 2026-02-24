@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { Project, Scene, FlyoverKeyframe } from '@/types'
-import { createDefaultProject, createDefaultScene } from '@/types'
+import type { Project, Scene, FlyoverKeyframe, SceneEffectDither } from '@/types'
+import { createDefaultProject, createDefaultScene, DEFAULT_DITHER } from '@/types'
 
 interface EditorState {
   project: Project
@@ -37,10 +37,14 @@ interface EditorState {
   flyoverEditMode: boolean
   setFlyoverEditMode: (v: boolean) => void
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  setProjectDither: (patch: Partial<SceneEffectDither>) => void
   resetProject: () => void
   /** When trim editor is open: which video is being edited and time to show in main canvas. */
   trimScrub: { video: 'background' | 'plane'; time: number } | null
   setTrimScrub: (value: { video: 'background' | 'plane'; time: number } | null) => void
+  /** Current camera in flyover edit mode; used to show if Start/End buttons are "at" keyframe. */
+  flyoverEditCamera: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null
+  setFlyoverEditCamera: (v: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null) => void
 }
 
 export const useStore = create<EditorState>((set) => ({
@@ -206,7 +210,7 @@ export const useStore = create<EditorState>((set) => ({
       },
     })),
   flyoverEditMode: true,
-  setFlyoverEditMode: (v) => set({ flyoverEditMode: v }),
+  setFlyoverEditMode: (v) => set({ flyoverEditMode: v, ...(v ? {} : { flyoverEditCamera: null }) }),
   setEffect: (sceneIndex, effectIndex, patch) =>
     set((s) => ({
       project: {
@@ -223,7 +227,16 @@ export const useStore = create<EditorState>((set) => ({
         ),
       },
     })),
+  setProjectDither: (patch) =>
+    set((s) => ({
+      project: {
+        ...s.project,
+        dither: { ...(s.project.dither ?? DEFAULT_DITHER), ...patch },
+      },
+    })),
   resetProject: () => set({ project: createDefaultProject(), currentSceneIndex: 0, currentTime: 0 }),
   trimScrub: null,
   setTrimScrub: (value) => set({ trimScrub: value }),
+  flyoverEditCamera: null,
+  setFlyoverEditCamera: (v) => set({ flyoverEditCamera: v }),
 }))

@@ -1,6 +1,7 @@
 import { useStore } from '@/store'
 import { getFlyoverEditCamera, setFlyoverEditCamera } from '@/flyoverCameraRef'
-import type { FlyoverKeyframe } from '@/types'
+import type { FlyoverKeyframe, FlyoverEasing } from '@/types'
+import { CurveEditor } from '@/components/CurveEditor'
 
 const PRESETS: { name: string; start: FlyoverKeyframe; end: FlyoverKeyframe }[] = [
   { name: 'Dolly in', start: { position: [0, 0, 6], rotation: [0, 0, 0], fov: 50 }, end: { position: [0, 0, 3.5], rotation: [0, 0, 0], fov: 50 } },
@@ -14,9 +15,16 @@ export function FlyoverPanel() {
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const setFlyoverEditMode = useStore((s) => s.setFlyoverEditMode)
   const setFlyoverKeyframes = useStore((s) => s.setFlyoverKeyframes)
+  const updateScene = useStore((s) => s.updateScene)
 
   if (!scene?.flyover) return null
   const { start, end } = scene.flyover
+
+  const setEasing = (easing: FlyoverEasing) => {
+    updateScene(currentSceneIndex, {
+      flyover: { ...scene.flyover!, easing },
+    })
+  }
 
   const handleSetStart = () => {
     const cam = getFlyoverEditCamera()
@@ -148,6 +156,16 @@ export function FlyoverPanel() {
           </div>
         </details>
       </>
+
+      <details className="mt-3 group" open>
+        <summary className="text-xs text-white/50 cursor-pointer hover:text-white/70 list-none flex items-center gap-1">
+          <span className="group-open:rotate-90 transition-transform">▶</span>
+          Motion curve
+        </summary>
+        <div className="mt-2 pl-4">
+          <CurveEditor value={scene.flyover.easing} onChange={setEasing} />
+        </div>
+      </details>
     </section>
   )
 }

@@ -175,6 +175,17 @@ export function Timeline() {
         >
           ✕
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setCurrentTime(sceneStarts[currentSceneIndex])
+            setPlaying(false)
+          }}
+          className="w-8 h-8 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm"
+          title="Jump to start of current scene"
+        >
+          ⏮
+        </button>
         <span className="text-xs text-white/60 tabular-nums ml-1">
           {formatTime(currentTime)} / {formatTime(totalDuration)}
         </span>

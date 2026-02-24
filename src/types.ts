@@ -5,6 +5,38 @@ export interface FlyoverKeyframe {
   fov?: number
 }
 
+/** Easing for camera flyover: preset name or custom cubic Bezier (CSS-style control points). */
+export type FlyoverEasing =
+  | { type: 'preset'; name: EasingPresetName }
+  | { type: 'cubic'; x1: number; y1: number; x2: number; y2: number }
+
+export type EasingPresetName =
+  | 'linear'
+  | 'easeIn'
+  | 'easeOut'
+  | 'easeInOut'
+  | 'easeInQuad'
+  | 'easeOutQuad'
+  | 'easeInOutQuad'
+  | 'easeInCubic'
+  | 'easeOutCubic'
+  | 'easeInOutCubic'
+  | 'easeInQuart'
+  | 'easeOutQuart'
+  | 'easeInOutQuart'
+  | 'easeInExpo'
+  | 'easeOutExpo'
+  | 'easeInOutExpo'
+  | 'easeInBack'
+  | 'easeOutBack'
+  | 'easeInOutBack'
+  | 'easeOutBounce'
+  | 'easeInBounce'
+  | 'easeInOutBounce'
+  | 'easeOutElastic'
+  | 'easeInElastic'
+  | 'easeInOutElastic'
+
 export interface SceneEffectZoom {
   type: 'zoom'
   startScale: number
@@ -158,6 +190,8 @@ export interface Scene {
     start: FlyoverKeyframe
     end: FlyoverKeyframe
     preset?: string // e.g. 'orbit-in', 'dolly'
+    /** Easing curve for camera motion. Defaults to linear if omitted. */
+    easing?: FlyoverEasing
   } | null
   effects: SceneEffect[]
 }
@@ -170,6 +204,8 @@ export interface Project {
   backgroundVideoUrl: string | null
   /** One shared plane video for all scenes; each scene defines its own trim (cut). */
   planeVideoUrl: string | null
+  /** Global dither applied to all scenes. */
+  dither: SceneEffectDither
   scenes: Scene[]
 }
 
@@ -212,16 +248,6 @@ export function createDefaultScene(id: string): Scene {
         speedEnd: 1.2,
       },
       {
-        type: 'dither',
-        enabled: false,
-        preset: 'medium',
-        mode: 'bayer4',
-        levels: 8,
-        intensity: 1,
-        luminanceOnly: false,
-        thresholdBias: 0,
-      },
-      {
         type: 'chromaticAberration',
         enabled: false,
         offset: 0.005,
@@ -260,6 +286,17 @@ export function createDefaultScene(id: string): Scene {
   }
 }
 
+export const DEFAULT_DITHER: SceneEffectDither = {
+  type: 'dither',
+  enabled: false,
+  preset: 'medium',
+  mode: 'bayer4',
+  levels: 8,
+  intensity: 1,
+  luminanceOnly: false,
+  thresholdBias: 0,
+}
+
 export function createDefaultProject(): Project {
   return {
     id: crypto.randomUUID(),
@@ -267,6 +304,7 @@ export function createDefaultProject(): Project {
     aspectRatio: DEFAULT_ASPECT,
     backgroundVideoUrl: null,
     planeVideoUrl: null,
+    dither: { ...DEFAULT_DITHER },
     scenes: [createDefaultScene(crypto.randomUUID())],
   }
 }
