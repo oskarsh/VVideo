@@ -5,6 +5,7 @@ import { EditorCanvas } from '@/components/EditorCanvas'
 import { Sidebar } from '@/components/Sidebar'
 import { RightSidebar } from '@/components/RightSidebar'
 import { Timeline } from '@/components/Timeline'
+import { ChangelogModal, useChangelog } from '@/components/ChangelogModal'
 
 function isVideoDrag(e: React.DragEvent | DragEvent): boolean {
   if (!e.dataTransfer?.types.includes('Files')) return false
@@ -168,6 +169,7 @@ export default function App() {
   const containerRef = useRef<HTMLDivElement>(null)
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const [showDropOverlay, setShowDropOverlay] = useState(false)
+  const changelog = useChangelog()
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
   const setProjectPlaneVideo = useStore((s) => s.setProjectPlaneVideo)
@@ -206,11 +208,25 @@ export default function App() {
           onDrop={handleDropOverlayDrop}
         />
       )}
+      <ChangelogModal
+        open={changelog.show}
+        onClose={changelog.close}
+        release={changelog.release}
+      />
       <PlaybackLoop />
       <SpacebarPlayback />
       <UndoRedoKeys />
       <header className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
-        <h1 className="text-lg font-semibold tracking-tight">VVideo</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold tracking-tight">VVideo</h1>
+          <button
+            type="button"
+            onClick={changelog.open}
+            className="text-xs text-white/50 hover:text-white/80 transition-colors"
+          >
+            What's new
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <UndoRedoButtons />
           <ResetProjectButton />

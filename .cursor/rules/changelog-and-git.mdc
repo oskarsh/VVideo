@@ -1,0 +1,28 @@
+---
+description: Keep changelog updated and commit/push meaningful changes
+alwaysApply: true
+---
+
+# Changelog and Git
+
+## Changelog
+
+- **Source of truth**: `src/changelog.ts` — array of releases (newest first). Each release has `version`, `date` (YYYY-MM-DD), `summary` (one short line), and `items` (bullet points).
+- **Repo view**: `CHANGELOG.md` — human-readable log. Keep it in sync with `src/changelog.ts`: same versions, dates, summaries, and items.
+
+When you make **meaningful** changes (new features, notable fixes, UX improvements):
+
+1. Add a new entry at the **top** of `changelogReleases` in `src/changelog.ts` (bump version, set today’s date, write a short summary and 3–5 item bullets).
+2. Add a matching section at the **top** of `CHANGELOG.md` (same version, date, summary, items). Use the existing `## X.Y.Z — YYYY-MM-DD` and `**Summary.**` format.
+
+Keep summaries and items **simple and readable**. No jargon.
+
+## Git
+
+After meaningful changes (including changelog updates):
+
+1. Stage: `git add .` (or specific files).
+2. Commit with a clear message, e.g. `feat: add X`, `fix: Y`, `chore: update changelog`.
+3. Push: `git push origin main`.
+
+Prefer one logical change per commit. You may make multiple commits in a row (e.g. implementation, then changelog + docs) and then push once.
