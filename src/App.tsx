@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { useStore } from '@/store'
+import { useLayout } from '@/context/LayoutContext'
 import { getFlyoverEditCamera } from '@/flyoverCameraRef'
 import { EditorCanvas } from '@/components/EditorCanvas'
 import { Sidebar } from '@/components/Sidebar'
@@ -8,9 +9,14 @@ import { Timeline } from '@/components/Timeline'
 import { ChangelogModal, useChangelog } from '@/components/ChangelogModal'
 import { WelcomeModal, useWelcome } from '@/components/WelcomeModal'
 import { AboutModal } from '@/components/AboutModal'
+import { TrimEditorSlot } from '@/components/TrimEditorSlot'
+import { ExportDialog } from '@/components/ExportDialog'
 import { VVideoLogo } from '@/components/VVideoLogo'
+import { PresetDropdown } from '@/components/PresetDropdown'
 import { StaticTextOverlay } from '@/components/StaticTextOverlay'
 import { getPlaneMedia } from '@/types'
+import { getFlyoverKeyframes } from '@/lib/flyover'
+import { FRAME_BY_FRAME_RESOLUTION_THRESHOLD } from '@/constants/export'
 
 function isMediaDrag(e: React.DragEvent | DragEvent): boolean {
   if (!e.dataTransfer?.types.includes('Files')) return false
@@ -70,7 +76,7 @@ function MediaDropOverlay({
       onDragLeave={handleDragLeave}
     >
       <div
-        className="flex-1 flex flex-col items-center justify-center gap-3 border-r border-white/20 bg-white/5 transition-colors hover:bg-emerald-950/40"
+        className="flex-1 flex flex-col items-center justify-center gap-3 border-r border-white/20 bg-white/5 transition-colors hover:bg-white/10"
         onDragOver={handleDragOver}
         onDrop={(e) => handleDrop(e, 'background')}
       >
@@ -79,7 +85,7 @@ function MediaDropOverlay({
         <span className="text-sm text-white/60">Drop video here</span>
       </div>
       <div
-        className="flex-1 flex flex-col items-center justify-center gap-3 border-l border-white/20 bg-white/5 transition-colors hover:bg-amber-950/40"
+        className="flex-1 flex flex-col items-center justify-center gap-3 border-l border-white/20 bg-white/5 transition-colors hover:bg-white/10"
         onDragOver={handleDragOver}
         onDrop={(e) => handleDrop(e, 'plane')}
       >
@@ -199,6 +205,9 @@ function CanvasStaticTextOverlay() {
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
+  const { setPreviewRef, setContentRef } = useLayout()
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const [showDropOverlay, setShowDropOverlay] = useState(false)
   const changelog = useChangelog()
@@ -210,6 +219,15 @@ export default function App() {
   const setPlaneTrim = useStore((s) => s.setPlaneTrim)
 
   const setProjectPlaneMedia = useStore((s) => s.setProjectPlaneMedia)
+
+  useEffect(() => {
+    setContentRef(contentRef.current)
+    return () => setContentRef(null)
+  }, [setContentRef])
+  useEffect(() => {
+    setPreviewRef(previewRef.current)
+    return () => setPreviewRef(null)
+  }, [setPreviewRef])
 
   const handleBackgroundDragOver = (e: React.DragEvent) => {
     if (isMediaDrag(e)) {
@@ -248,9 +266,9 @@ export default function App() {
       <ChangelogModal
         open={changelog.show}
         onClose={changelog.close}
-        release={changelog.release}
       />
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <TrimEditorSlot />
       <PlaybackLoop />
       <SpacebarPlayback />
       <UndoRedoKeys />
@@ -262,7 +280,7 @@ export default function App() {
             onClick={changelog.open}
             className="text-xs text-white/50 hover:text-white/80 transition-colors"
           >
-            What's new
+            Changelog
           </button>
           <button
             type="button"
@@ -273,6 +291,7 @@ export default function App() {
           </button>
         </div>
         <div className="flex items-center gap-2">
+          <PresetDropdown />
           <UndoRedoButtons />
           <ResetProjectButton />
           <ExportButton />
@@ -282,8 +301,12 @@ export default function App() {
         <aside className="w-72 border-r border-white/10 overflow-y-auto shrink-0">
           <Sidebar />
         </aside>
-        <main className="flex-1 flex flex-col items-center justify-center gap-4 p-4 min-h-0">
+        <main
+          ref={contentRef}
+          className="flex-1 flex flex-col items-center justify-center gap-4 p-4 min-h-0"
+        >
           <div
+            ref={previewRef}
             className="relative rounded-lg overflow-hidden"
             style={flyoverEditMode ? { pointerEvents: 'none' } : undefined}
           >
@@ -292,77 +315,50 @@ export default function App() {
               <CanvasStaticTextOverlay />
             </div>
           </div>
-          <CameraKeyframeButtons />
+          <div className="flex w-full max-w-4xl items-center justify-between gap-4">
+            <CameraKeyframeButtons />
+            <CameraCoordsDisplay />
+          </div>
         </main>
         <aside className="w-72 border-l border-white/10 overflow-y-auto shrink-0 bg-zinc-900/30">
           <RightSidebar />
         </aside>
       </div>
-      <div className="shrink-0 border-t border-white/10">
+      <div className="shrink-0 min-w-0 border-t border-white/10">
         <Timeline />
       </div>
     </div>
   )
 }
 
-const CAMERA_MATCH_EPS = 2e-4
-const FOV_MATCH_EPS = 1
-
-function cameraMatchesKeyframe(
-  cam: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null,
-  kf: { position: [number, number, number]; rotation: [number, number, number]; fov?: number } | undefined
-): boolean {
-  if (!cam || !kf?.position) return false
-  const [x, y, z] = cam.position
-  const [kx, ky, kz] = kf.position
-  if (Math.abs(x - kx) > CAMERA_MATCH_EPS || Math.abs(y - ky) > CAMERA_MATCH_EPS || Math.abs(z - kz) > CAMERA_MATCH_EPS) return false
-  const [rx, ry, rz] = cam.rotation
-  const [krx, kry, krz] = kf.rotation
-  if (Math.abs(rx - krx) > CAMERA_MATCH_EPS || Math.abs(ry - kry) > CAMERA_MATCH_EPS || Math.abs(rz - krz) > CAMERA_MATCH_EPS) return false
-  const kfFov = kf.fov ?? 50
-  if (Math.abs(cam.fov - kfFov) > FOV_MATCH_EPS) return false
-  return true
-}
-
 function CameraKeyframeButtons() {
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const currentTime = useStore((s) => s.currentTime)
+  const project = useStore((s) => s.project)
   const scene = useStore((s) => s.project.scenes[currentSceneIndex])
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
-  const flyoverEditCamera = useStore((s) => s.flyoverEditCamera)
-  const setFlyoverKeyframes = useStore((s) => s.setFlyoverKeyframes)
+  const addFlyoverKeyframe = useStore((s) => s.addFlyoverKeyframe)
   const setFlyoverJumpToStart = useStore((s) => s.setFlyoverJumpToStart)
 
   if (!scene?.flyover) return null
-  const { start, end } = scene.flyover
-  const defaultPos: [number, number, number] = [0, 0, 5]
-  const defaultRot: [number, number, number] = [0, 0, 0]
-  const hasStart = Boolean(
-    start?.position &&
-    (start.position[0] !== defaultPos[0] || start.position[1] !== defaultPos[1] || start.position[2] !== defaultPos[2] ||
-      start.rotation.some((r, i) => r !== defaultRot[i]))
-  )
-  const hasEnd = Boolean(
-    end?.position &&
-    (end.position[0] !== defaultPos[0] || end.position[1] !== defaultPos[1] || end.position[2] !== defaultPos[2] ||
-      end.rotation.some((r, i) => r !== defaultRot[i]))
-  )
-  const atStartPosition = flyoverEditMode && hasStart && cameraMatchesKeyframe(flyoverEditCamera, start)
-  const atEndPosition = flyoverEditMode && hasEnd && cameraMatchesKeyframe(flyoverEditCamera, end)
 
-  const handleSetStart = () => {
+  const sceneStarts = project.scenes.reduce<number[]>(
+    (acc, s, i) => [...acc, (acc[i] ?? 0) + s.durationSeconds],
+    [0]
+  )
+  const sceneStart = sceneStarts[currentSceneIndex] ?? 0
+  const sceneDuration = scene.durationSeconds
+  const sceneLocalTime = Math.max(0, Math.min(sceneDuration, currentTime - sceneStart))
+  const normalizedTime = sceneDuration > 0 ? sceneLocalTime / sceneDuration : 0
+
+  const keyframes = getFlyoverKeyframes(scene)
+  const hasKeyframes = keyframes.length > 0
+
+  const handleAddKeyframe = () => {
     const cam = getFlyoverEditCamera()
     if (!cam) return
-    setFlyoverKeyframes(currentSceneIndex, {
-      position: [...cam.position],
-      rotation: [...cam.rotation],
-      fov: cam.fov,
-    }, end)
-  }
-
-  const handleSetEnd = () => {
-    const cam = getFlyoverEditCamera()
-    if (!cam) return
-    setFlyoverKeyframes(currentSceneIndex, start, {
+    addFlyoverKeyframe(currentSceneIndex, {
+      time: Math.max(0, Math.min(1, normalizedTime)),
       position: [...cam.position],
       rotation: [...cam.rotation],
       fov: cam.fov,
@@ -375,45 +371,54 @@ function CameraKeyframeButtons() {
     <div className="flex gap-2">
       <button
         type="button"
-        onClick={handleSetStart}
+        onClick={handleAddKeyframe}
         disabled={!flyoverEditMode}
-        title={flyoverEditMode ? 'Set current view as start keyframe' : 'Enable fly-around first'}
+        title={flyoverEditMode ? 'Add keyframe at current playhead' : 'Enable fly-around first'}
         className="flex flex-1 min-w-0 max-w-xs items-center justify-center gap-2 rounded-full border-2 py-2 px-5 text-sm font-medium text-white/80 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 bg-white/10 hover:bg-white/15 disabled:hover:bg-white/10 whitespace-nowrap"
-        style={{
-          borderColor: atStartPosition ? accent : 'transparent',
-        }}
+        style={{ borderColor: 'transparent' }}
       >
         <span
           className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
-          style={{ backgroundColor: hasStart ? accent : 'rgba(255,255,255,0.4)' }}
+          style={{ backgroundColor: hasKeyframes ? accent : 'rgba(255,255,255,0.4)' }}
         />
-        {hasStart ? 'Start' : 'Set start'}
-      </button>
-      <button
-        type="button"
-        onClick={handleSetEnd}
-        disabled={!flyoverEditMode}
-        title={flyoverEditMode ? 'Set current view as end keyframe' : 'Enable fly-around first'}
-        className="flex flex-1 min-w-0 max-w-xs items-center justify-center gap-2 rounded-full border-2 py-2 px-5 text-sm font-medium text-white/80 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 bg-white/10 hover:bg-white/15 disabled:hover:bg-white/10 whitespace-nowrap"
-        style={{
-          borderColor: atEndPosition ? accent : 'transparent',
-        }}
-      >
-        <span
-          className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
-          style={{ backgroundColor: hasEnd ? accent : 'rgba(255,255,255,0.4)' }}
-        />
-        {hasEnd ? 'End' : 'Set end'}
+        Add keyframe
       </button>
       <button
         type="button"
         onClick={() => setFlyoverJumpToStart(true)}
-        disabled={!flyoverEditMode || !hasStart}
-        title="Move camera to start keyframe position"
+        disabled={!flyoverEditMode || !hasKeyframes}
+        title="Move camera to first keyframe"
         className="shrink-0 rounded-full border-2 border-transparent py-2 px-4 text-sm font-medium text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed bg-white/10 whitespace-nowrap"
       >
-        Jump to start
+        Jump to first
       </button>
+    </div>
+  )
+}
+
+function CameraCoordsDisplay() {
+  const flyoverEditCamera = useStore((s) => s.flyoverEditCamera)
+  const [x, y, z] = flyoverEditCamera?.position ?? [0, 0, 3.5]
+  const fmt = (n: number) => n.toFixed(2)
+
+  return (
+    <div className="flex items-center gap-2 text-white/50 ml-auto" title="Camera position (x, y, z)">
+      <svg
+        className="h-4 w-4 shrink-0 opacity-70"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        viewBox="0 0 24 24"
+        aria-hidden
+      >
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+        <circle cx="12" cy="13" r="4" />
+      </svg>
+      <span className="font-mono text-xs tabular-nums">
+        {fmt(x)}, {fmt(y)}, {fmt(z)}
+      </span>
     </div>
   )
 }
@@ -468,25 +473,6 @@ function ResetProjectButton() {
     </button>
   )
 }
-
-const EXPORT_FRAMERATES = [24, 25, 30, 60] as const
-const EXPORT_BITRATES = [
-  { label: '4 Mbps', value: 4_000_000 },
-  { label: '8 Mbps', value: 8_000_000 },
-  { label: '12 Mbps', value: 12_000_000 },
-  { label: '16 Mbps', value: 16_000_000 },
-  { label: '24 Mbps', value: 24_000_000 },
-  { label: '32 Mbps', value: 32_000_000 },
-] as const
-const EXPORT_RESOLUTIONS = [
-  { label: '480p', value: 480 },
-  { label: '720p', value: 720 },
-  { label: '1080p', value: 1080 },
-  { label: '2K', value: 1440 },
-  { label: '4K', value: 2160 },
-] as const
-/** Resolutions that use frame-by-frame export (smooth, may be slower than real-time). */
-const FRAME_BY_FRAME_RESOLUTION_THRESHOLD = 1440
 
 function sceneIndexAtTime(scenes: { durationSeconds: number }[], t: number): number {
   let acc = 0
@@ -588,6 +574,7 @@ function ExportButton() {
       </button>
       {exportDialogOpen && (
         <ExportDialog
+          open={exportDialogOpen}
           framerate={framerate}
           setFramerate={setFramerate}
           bitrate={bitrate}
@@ -607,180 +594,5 @@ function ExportButton() {
   )
 }
 
-function ExportDialog({
-  framerate,
-  setFramerate,
-  bitrate,
-  setBitrate,
-  resolution,
-  setResolution,
-  frameByFrame,
-  setFrameByFrame,
-  content,
-  setContent,
-  hasPlaneMedia,
-  onClose,
-  onExport,
-}: {
-  framerate: number
-  setFramerate: (n: number) => void
-  bitrate: number
-  setBitrate: (n: number) => void
-  resolution: number
-  setResolution: (n: number) => void
-  frameByFrame: boolean
-  setFrameByFrame: (v: boolean) => void
-  content: 'full' | 'plane-only'
-  setContent: (c: 'full' | 'plane-only') => void
-  hasPlaneMedia: boolean
-  onClose: () => void
-  onExport: () => void
-}) {
-  const useFrameByFrameForRes = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-5 shadow-xl">
-        <h2 className="text-lg font-semibold text-white mb-4">Export options</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
-              Resolution
-            </label>
-            <div className="flex gap-2">
-              {EXPORT_RESOLUTIONS.map(({ label, value }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setResolution(value)}
-                  className={`flex-1 px-2 py-2 rounded text-sm font-medium ${resolution === value ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'
-                    }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {useFrameByFrameForRes && (
-              <p className="text-xs text-white/50 mt-1.5">
-                2K/4K always use frame-by-frame for a smooth result.
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10">
-              <input
-                type="checkbox"
-                checked={frameByFrame || useFrameByFrameForRes}
-                onChange={(e) => setFrameByFrame(e.target.checked)}
-                disabled={useFrameByFrameForRes}
-                className="rounded text-white"
-              />
-              <div>
-                <span className="text-sm font-medium text-white">Smooth export (frame-by-frame)</span>
-                <p className="text-xs text-white/50 mt-0.5">
-                  {useFrameByFrameForRes
-                    ? 'Always on for 2K/4K.'
-                    : 'No dropped frames; export may take longer than real-time.'}
-                </p>
-              </div>
-            </label>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
-              Framerate
-            </label>
-            <div className="flex gap-2">
-              {EXPORT_FRAMERATES.map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFramerate(f)}
-                  className={`flex-1 px-2 py-2 rounded text-sm font-medium ${framerate === f ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'
-                    }`}
-                >
-                  {f} fps
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
-              Bitrate
-            </label>
-            <select
-              value={bitrate}
-              onChange={(e) => setBitrate(Number(e.target.value))}
-              className="w-full px-3 py-2 rounded bg-white/10 border border-white/10 text-white text-sm"
-            >
-              {EXPORT_BITRATES.map(({ label, value }) => (
-                <option key={value} value={value} className="bg-zinc-900">
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
-              Export content
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10">
-                <input
-                  type="radio"
-                  name="export-content"
-                  checked={content === 'full'}
-                  onChange={() => setContent('full')}
-                  className="text-white"
-                />
-                <div>
-                  <span className="text-sm font-medium text-white">Full composite</span>
-                  <p className="text-xs text-white/50 mt-0.5">
-                    Background + panel video, camera, effects (WebM)
-                  </p>
-                </div>
-              </label>
-              <label
-                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${hasPlaneMedia
-                  ? 'bg-white/5 border-white/10 hover:bg-white/10'
-                  : 'border-white/5 bg-white/5 opacity-60 cursor-not-allowed'
-                  }`}
-              >
-                <input
-                  type="radio"
-                  name="export-content"
-                  checked={content === 'plane-only'}
-                  onChange={() => hasPlaneMedia && setContent('plane-only')}
-                  disabled={!hasPlaneMedia}
-                  className="text-white"
-                />
-                <div>
-                  <span className="text-sm font-medium text-white">Panel only (transparent)</span>
-                  <p className="text-xs text-white/50 mt-0.5">
-                    {hasPlaneMedia
-                      ? 'Panel + effects, transparent background (WebM with alpha)'
-                      : 'Add a panel video, image or SVG in the sidebar to use this'}
-                  </p>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2 mt-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-white/80 bg-white/10 hover:bg-white/20"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onExport}
-            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white text-black hover:bg-gray-200"
-          >
-            Start export
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+
+

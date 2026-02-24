@@ -4,9 +4,11 @@ import { DitherControls } from './EffectsPanel'
 export function GlobalDitherControls({
   dither,
   onPatch,
+  sidebarMode = false,
 }: {
   dither: SceneEffectDither
   onPatch: (patch: Partial<SceneEffectDither>) => void
+  sidebarMode?: boolean
 }) {
   return (
     <DitherControls
@@ -14,6 +16,7 @@ export function GlobalDitherControls({
       sceneIndex={0}
       effectIndex={0}
       setEffect={(_s, _e, patch) => onPatch(patch as Partial<SceneEffectDither>)}
+      sidebarMode={sidebarMode}
     />
   )
 }

@@ -1,0 +1,22 @@
+---
+description: Apply VVideo global style system when adding or changing UI
+alwaysApply: true
+---
+
+# Style system
+
+When adding or changing UI (components, panels, buttons, inputs, typography), follow the **global style system** so the app stays consistent.
+
+## Source of truth
+
+- **Full doc**: `docs/STYLE-SYSTEM.md` — read it for new UI work or when unsure. It defines colors, typography, spacing, borders, radius, and copy-paste patterns.
+
+## Short reference
+
+- **Stack**: Tailwind only. Base styles in `src/index.css`; theme in `tailwind.config.js` (only font extended: IBM Plex Mono).
+- **Colors**: Surfaces `bg-white/5`, `bg-white/10`, `bg-black/30`; borders `border-white/10` (default), `border-white/20` inputs, `border-white/30` focus; text hierarchy `text-white`, `text-white/80`, `text-white/60`, `text-white/50`. **Reserve emerald** for toggle-on and at most one primary CTA per view; use secondary/neutral for “Use texture”, “Add text”, apply, selected chips, drop zones, trim handles. Primary/success: emerald. Destructive: red. Selected option/tab: `bg-white text-black`. No blue/amber/cyan accents.
+- **Section headings**: `text-xs font-semibold text-white/60 uppercase tracking-wider` (optional `mb-2` or `py-2.5`). Small labels: `text-[10px] text-white/50 uppercase tracking-wider block mb-1.5`.
+- **Cards**: `rounded-lg border border-white/10 bg-white/5 p-3`. Buttons/inputs: `rounded` or `rounded-md`.
+- **Inputs**: `bg-black/30 border border-white/10 text-xs text-white/80 focus:border-white/30 outline-none`. See `inputClass` in `EffectsPanel.tsx` or the doc.
+
+When in doubt or when doing a larger UI change, open `docs/STYLE-SYSTEM.md` and use its patterns and checklist.

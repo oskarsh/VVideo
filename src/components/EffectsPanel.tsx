@@ -1,5 +1,9 @@
 import { useStore } from '@/store'
-import { CollapsibleSection } from './CollapsibleSection'
+import { useMemo } from 'react'
+import { createPortal } from 'react-dom'
+import { useFloatingPanels } from '@/hooks/useFloatingPanels'
+import { DraggableEffectWindow } from './DraggableEffectWindow'
+import { PanelRow } from './PanelRow'
 import type {
   SceneEffectZoom,
   SceneEffectGrain,
@@ -11,211 +15,290 @@ import type {
   SceneEffectGlitch,
   SceneEffectVignette,
   SceneEffectScanline,
+  SceneEffect,
 } from '@/types'
+import { EFFECT_DISPLAY_NAMES } from '@/lib/effectLabels'
+import { inputClass } from '@/constants/ui'
 
-const inputClass =
-  'block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10 text-xs text-white/80 focus:border-white/30 outline-none'
+function effectKey(sceneIndex: number, effectIndex: number) {
+  return `${sceneIndex}-${effectIndex}`
+}
 
 export function EffectsPanel() {
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const scene = useStore((s) => s.project.scenes[currentSceneIndex])
   const setEffect = useStore((s) => s.setEffect)
 
+  const allPanelKeys = useMemo(
+    () =>
+      scene
+        ? scene.effects.map((_, i) => effectKey(currentSceneIndex, i))
+        : [],
+    [scene, currentSceneIndex]
+  )
+  const {
+    openPanels,
+    panelPositions,
+    togglePanel,
+    closePanel,
+    setPanelPosition,
+    positionByKey,
+  } = useFloatingPanels(allPanelKeys)
+
   if (!scene) return null
 
   return (
-    <div className="space-y-0">
-      {scene.effects.map((eff, i) => {
-        if (eff.type === 'zoom')
+    <>
+      <div className="space-y-0">
+        {scene.effects.map((eff, i) => {
+          const key = effectKey(currentSceneIndex, i)
+          const enabled =
+            'enabled' in eff
+              ? (eff as { enabled: boolean }).enabled
+              : (eff as SceneEffectZoom & { enabled?: boolean }).enabled !== false
+          const title = EFFECT_DISPLAY_NAMES[eff.type] ?? eff.type
+
+          const handleToggleEnabled = (e: React.MouseEvent) => {
+            e.stopPropagation()
+            setEffect(currentSceneIndex, i, {
+              enabled: 'enabled' in eff ? !(eff as { enabled: boolean }).enabled : !enabled,
+            })
+          }
+
+          const handleRowClick = () => togglePanel(key)
+
           return (
-            <CollapsibleSection key={i} title="Zoom" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-[11px] text-white/50">
-                    Start
-                    <input
-                      type="number"
-                      step={0.01}
-                      min={0.5}
-                      value={(eff as SceneEffectZoom).startScale}
-                      onChange={(e) =>
-                        setEffect(currentSceneIndex, i, {
-                          startScale: parseFloat(e.target.value) || 1,
-                        })
-                      }
-                      className={inputClass}
-                    />
-                  </label>
-                  <label className="text-[11px] text-white/50">
-                    End
-                    <input
-                      type="number"
-                      step={0.01}
-                      min={0.5}
-                      value={(eff as SceneEffectZoom).endScale}
-                      onChange={(e) =>
-                        setEffect(currentSceneIndex, i, {
-                          endScale: parseFloat(e.target.value) || 1,
-                        })
-                      }
-                      className={inputClass}
-                    />
-                  </label>
-                </div>
-              </div>
-            </CollapsibleSection>
+            <PanelRow
+              key={i}
+              title={title}
+              enabled={enabled}
+              onToggleEnabled={handleToggleEnabled}
+              onClick={handleRowClick}
+            />
           )
-        if (eff.type === 'grain') {
-          const g = eff as SceneEffectGrain & { opacity?: number }
-          const startVal = g.startOpacity ?? g.opacity ?? 0.15
-          const endVal = g.endOpacity ?? g.opacity ?? 0.15
-          return (
-            <CollapsibleSection key={i} title="Grain" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2 space-y-2">
-                <label className="block text-[11px] text-white/50">
-                  Opacity
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div>
-                      <span className="text-white/40">S</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={0.5}
-                        step={0.01}
-                        value={startVal}
-                        onChange={(e) =>
-                          setEffect(currentSceneIndex, i, {
-                            startOpacity: parseFloat(e.target.value),
-                            endOpacity: g.endOpacity ?? g.opacity ?? 0.15,
-                          })
-                        }
-                        className="w-full mt-0.5"
-                      />
-                      <span className="text-[10px] text-white/40">
-                        {(startVal * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-white/40">E</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={0.5}
-                        step={0.01}
-                        value={endVal}
-                        onChange={(e) =>
-                          setEffect(currentSceneIndex, i, {
-                            startOpacity: g.startOpacity ?? g.opacity ?? 0.15,
-                            endOpacity: parseFloat(e.target.value),
-                          })
-                        }
-                        className="w-full mt-0.5"
-                      />
-                      <span className="text-[10px] text-white/40">
-                        {(endVal * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </CollapsibleSection>
-          )
-        }
-        if (eff.type === 'dof')
-          return (
-            <CollapsibleSection key={i} title="Depth of field" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2">
-                <DoFControls
-                  eff={eff as SceneEffectDoF}
-                  sceneIndex={currentSceneIndex}
-                  effectIndex={i}
-                  setEffect={setEffect}
-                />
-              </div>
-            </CollapsibleSection>
-          )
-        if (eff.type === 'handheld')
-          return (
-            <CollapsibleSection key={i} title="Handheld camera" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2">
-                <HandheldControls
-                  eff={eff as SceneEffectHandheld}
-                  sceneIndex={currentSceneIndex}
-                  effectIndex={i}
-                  setEffect={setEffect}
-                />
-              </div>
-            </CollapsibleSection>
-          )
-        if (eff.type === 'chromaticAberration')
-          return (
-            <CollapsibleSection key={i} title="Chromatic aberration" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2">
-                <ChromaticAberrationControls
-                  eff={eff as SceneEffectChromaticAberration}
-                  sceneIndex={currentSceneIndex}
-                  effectIndex={i}
-                  setEffect={setEffect}
-                />
-              </div>
-            </CollapsibleSection>
-          )
-        if (eff.type === 'lensDistortion')
-          return (
-            <CollapsibleSection key={i} title="Lens distortion" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2">
-                <LensDistortionControls
-                  eff={eff as SceneEffectLensDistortion}
-                  sceneIndex={currentSceneIndex}
-                  effectIndex={i}
-                  setEffect={setEffect}
-                />
-              </div>
-            </CollapsibleSection>
-          )
-        if (eff.type === 'glitch')
-          return (
-            <CollapsibleSection key={i} title="Glitch" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2">
-                <GlitchControls
-                  eff={eff as SceneEffectGlitch}
-                  sceneIndex={currentSceneIndex}
-                  effectIndex={i}
-                  setEffect={setEffect}
-                />
-              </div>
-            </CollapsibleSection>
-          )
-        if (eff.type === 'vignette')
-          return (
-            <CollapsibleSection key={i} title="Vignette" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2">
-                <VignetteControls
-                  eff={eff as SceneEffectVignette}
-                  sceneIndex={currentSceneIndex}
-                  effectIndex={i}
-                  setEffect={setEffect}
-                />
-              </div>
-            </CollapsibleSection>
-          )
-        if (eff.type === 'scanline')
-          return (
-            <CollapsibleSection key={i} title="Scanlines" defaultOpen={false}>
-              <div className="rounded bg-white/5 p-2">
-                <ScanlineControls
-                  eff={eff as SceneEffectScanline}
-                  sceneIndex={currentSceneIndex}
-                  effectIndex={i}
-                  setEffect={setEffect}
-                />
-              </div>
-            </CollapsibleSection>
-          )
-        return null
-      })}
-    </div>
+        })}
+      </div>
+
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <>
+            {scene.effects.map((eff, i) => {
+              const key = effectKey(currentSceneIndex, i)
+              if (!openPanels.has(key)) return null
+              const title = EFFECT_DISPLAY_NAMES[eff.type] ?? eff.type
+              const pos = panelPositions[key] ?? positionByKey[key] ?? { x: 320, y: 80 }
+              const content = renderEffectContent(
+                eff,
+                currentSceneIndex,
+                i,
+                setEffect,
+                true
+              )
+              if (!content) return null
+              return (
+                <DraggableEffectWindow
+                  key={key}
+                  id={`effect-panel-${key}`}
+                  title={title}
+                  defaultX={pos.x}
+                  defaultY={pos.y}
+                  onPositionChange={(x, y) => setPanelPosition(key, x, y)}
+                  onClose={() => closePanel(key)}
+                >
+                  {content}
+                </DraggableEffectWindow>
+              )
+            })}
+          </>,
+          document.body
+        )}
+    </>
   )
+}
+
+function renderEffectContent(
+  eff: SceneEffect,
+  sceneIndex: number,
+  effectIndex: number,
+  setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void,
+  sidebarMode: boolean
+): React.ReactNode {
+  if (eff.type === 'zoom')
+    return (
+      <div className="rounded bg-white/5 p-2 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-[11px] text-white/50">
+            Start
+            <input
+              type="number"
+              step={0.01}
+              min={0.5}
+              value={(eff as SceneEffectZoom).startScale}
+              onChange={(e) =>
+                setEffect(sceneIndex, effectIndex, {
+                  startScale: parseFloat(e.target.value) || 1,
+                })
+              }
+              className={inputClass}
+            />
+          </label>
+          <label className="text-[11px] text-white/50">
+            End
+            <input
+              type="number"
+              step={0.01}
+              min={0.5}
+              value={(eff as SceneEffectZoom).endScale}
+              onChange={(e) =>
+                setEffect(sceneIndex, effectIndex, {
+                  endScale: parseFloat(e.target.value) || 1,
+                })
+              }
+              className={inputClass}
+            />
+          </label>
+        </div>
+      </div>
+    )
+  if (eff.type === 'grain') {
+    const g = eff as SceneEffectGrain & { opacity?: number }
+    const startVal = g.startOpacity ?? g.opacity ?? 0.15
+    const endVal = g.endOpacity ?? g.opacity ?? 0.15
+    return (
+      <div className="rounded bg-white/5 p-2 space-y-2">
+        <label className="block text-[11px] text-white/50">
+          Opacity
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <div>
+              <span className="text-white/40">S</span>
+              <input
+                type="range"
+                min={0}
+                max={0.5}
+                step={0.01}
+                value={startVal}
+                onChange={(e) =>
+                  setEffect(sceneIndex, effectIndex, {
+                    startOpacity: parseFloat(e.target.value),
+                    endOpacity: g.endOpacity ?? g.opacity ?? 0.15,
+                  })
+                }
+                className="w-full mt-0.5"
+              />
+              <span className="text-[10px] text-white/40">
+                {(startVal * 100).toFixed(0)}%
+              </span>
+            </div>
+            <div>
+              <span className="text-white/40">E</span>
+              <input
+                type="range"
+                min={0}
+                max={0.5}
+                step={0.01}
+                value={endVal}
+                onChange={(e) =>
+                  setEffect(sceneIndex, effectIndex, {
+                    startOpacity: g.startOpacity ?? g.opacity ?? 0.15,
+                    endOpacity: parseFloat(e.target.value),
+                  })
+                }
+                className="w-full mt-0.5"
+              />
+              <span className="text-[10px] text-white/40">
+                {(endVal * 100).toFixed(0)}%
+              </span>
+            </div>
+          </div>
+        </label>
+      </div>
+    )
+  }
+  if (eff.type === 'dof')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <DoFControls
+          eff={eff as SceneEffectDoF}
+          sceneIndex={sceneIndex}
+          effectIndex={effectIndex}
+          setEffect={setEffect}
+          sidebarMode={sidebarMode}
+        />
+      </div>
+    )
+  if (eff.type === 'handheld')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <HandheldControls
+          eff={eff as SceneEffectHandheld}
+          sceneIndex={sceneIndex}
+          effectIndex={effectIndex}
+          setEffect={setEffect}
+          sidebarMode={sidebarMode}
+        />
+      </div>
+    )
+  if (eff.type === 'chromaticAberration')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <ChromaticAberrationControls
+          eff={eff as SceneEffectChromaticAberration}
+          sceneIndex={sceneIndex}
+          effectIndex={effectIndex}
+          setEffect={setEffect}
+          sidebarMode={sidebarMode}
+        />
+      </div>
+    )
+  if (eff.type === 'lensDistortion')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <LensDistortionControls
+          eff={eff as SceneEffectLensDistortion}
+          sceneIndex={sceneIndex}
+          effectIndex={effectIndex}
+          setEffect={setEffect}
+          sidebarMode={sidebarMode}
+        />
+      </div>
+    )
+  if (eff.type === 'glitch')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <GlitchControls
+          eff={eff as SceneEffectGlitch}
+          sceneIndex={sceneIndex}
+          effectIndex={effectIndex}
+          setEffect={setEffect}
+          sidebarMode={sidebarMode}
+        />
+      </div>
+    )
+  if (eff.type === 'vignette')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <VignetteControls
+          eff={eff as SceneEffectVignette}
+          sceneIndex={sceneIndex}
+          effectIndex={effectIndex}
+          setEffect={setEffect}
+          sidebarMode={sidebarMode}
+        />
+      </div>
+    )
+  if (eff.type === 'scanline')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <ScanlineControls
+          eff={eff as SceneEffectScanline}
+          sceneIndex={sceneIndex}
+          effectIndex={effectIndex}
+          setEffect={setEffect}
+          sidebarMode={sidebarMode}
+        />
+      </div>
+    )
+  return null
 }
 
 function KeyframeSlider({
@@ -284,11 +367,13 @@ function DoFControls({
   sceneIndex,
   effectIndex,
   setEffect,
+  sidebarMode: _sidebarMode = false,
 }: {
   eff: SceneEffectDoF
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
 }) {
   const d = eff as DoFLegacy
   const fdS = d.focusDistanceStart ?? d.focusDistance ?? 0.015
@@ -301,63 +386,52 @@ function DoFControls({
   const bE = d.bokehScaleEnd ?? d.bokehScale ?? 6
   return (
     <div className="space-y-3">
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={eff.enabled}
-          onChange={(e) => setEffect(sceneIndex, effectIndex, { enabled: e.target.checked })}
-          className="rounded border-white/20"
+      <div className="space-y-3">
+        <KeyframeSlider
+          label="Focus distance"
+          start={fdS}
+          end={fdE}
+          min={0}
+          max={0.1}
+          step={0.001}
+          format={(v) => v.toFixed(3)}
+          onStart={(v) => setEffect(sceneIndex, effectIndex, { focusDistanceStart: v })}
+          onEnd={(v) => setEffect(sceneIndex, effectIndex, { focusDistanceEnd: v })}
         />
-        <span className="text-[11px] text-white/60">Enabled</span>
-      </label>
-      {eff.enabled && (
-        <div className="space-y-3">
-          <KeyframeSlider
-            label="Focus distance"
-            start={fdS}
-            end={fdE}
-            min={0}
-            max={0.1}
-            step={0.001}
-            format={(v) => v.toFixed(3)}
-            onStart={(v) => setEffect(sceneIndex, effectIndex, { focusDistanceStart: v })}
-            onEnd={(v) => setEffect(sceneIndex, effectIndex, { focusDistanceEnd: v })}
-          />
-          <KeyframeSlider
-            label="Focal length"
-            start={flS}
-            end={flE}
-            min={0.001}
-            max={0.08}
-            step={0.001}
-            format={(v) => v.toFixed(3)}
-            onStart={(v) => setEffect(sceneIndex, effectIndex, { focalLengthStart: v })}
-            onEnd={(v) => setEffect(sceneIndex, effectIndex, { focalLengthEnd: v })}
-          />
-          <KeyframeSlider
-            label="Focus range"
-            start={frS}
-            end={frE}
-            min={0.05}
-            max={2}
-            step={0.05}
-            format={(v) => v.toFixed(2)}
-            onStart={(v) => setEffect(sceneIndex, effectIndex, { focusRangeStart: v })}
-            onEnd={(v) => setEffect(sceneIndex, effectIndex, { focusRangeEnd: v })}
-          />
-          <KeyframeSlider
-            label="Bokeh scale"
-            start={bS}
-            end={bE}
-            min={0.5}
-            max={15}
-            step={0.5}
-            format={(v) => v.toFixed(1)}
-            onStart={(v) => setEffect(sceneIndex, effectIndex, { bokehScaleStart: v })}
-            onEnd={(v) => setEffect(sceneIndex, effectIndex, { bokehScaleEnd: v })}
-          />
-        </div>
-      )}
+        <KeyframeSlider
+          label="Focal length"
+          start={flS}
+          end={flE}
+          min={0.001}
+          max={0.08}
+          step={0.001}
+          format={(v) => v.toFixed(3)}
+          onStart={(v) => setEffect(sceneIndex, effectIndex, { focalLengthStart: v })}
+          onEnd={(v) => setEffect(sceneIndex, effectIndex, { focalLengthEnd: v })}
+        />
+        <KeyframeSlider
+          label="Focus range"
+          start={frS}
+          end={frE}
+          min={0.05}
+          max={2}
+          step={0.05}
+          format={(v) => v.toFixed(2)}
+          onStart={(v) => setEffect(sceneIndex, effectIndex, { focusRangeStart: v })}
+          onEnd={(v) => setEffect(sceneIndex, effectIndex, { focusRangeEnd: v })}
+        />
+        <KeyframeSlider
+          label="Bokeh scale"
+          start={bS}
+          end={bE}
+          min={0.5}
+          max={15}
+          step={0.5}
+          format={(v) => v.toFixed(1)}
+          onStart={(v) => setEffect(sceneIndex, effectIndex, { bokehScaleStart: v })}
+          onEnd={(v) => setEffect(sceneIndex, effectIndex, { bokehScaleEnd: v })}
+        />
+      </div>
     </div>
   )
 }
@@ -373,11 +447,13 @@ function HandheldControls({
   sceneIndex,
   effectIndex,
   setEffect,
+  sidebarMode: _sidebarMode = false,
 }: {
   eff: SceneEffectHandheld
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
 }) {
   const h = eff as HandheldLegacy
   const iS = h.intensityStart ?? h.intensity ?? 0.012
@@ -388,52 +464,41 @@ function HandheldControls({
   const sE = h.speedEnd ?? h.speed ?? 1.2
   return (
     <div className="space-y-3">
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={eff.enabled}
-          onChange={(e) => setEffect(sceneIndex, effectIndex, { enabled: e.target.checked })}
-          className="rounded border-white/20"
+      <div className="space-y-3">
+        <KeyframeSlider
+          label="Position shake"
+          start={iS}
+          end={iE}
+          min={0}
+          max={0.05}
+          step={0.001}
+          format={(v) => v.toFixed(3)}
+          onStart={(v) => setEffect(sceneIndex, effectIndex, { intensityStart: v })}
+          onEnd={(v) => setEffect(sceneIndex, effectIndex, { intensityEnd: v })}
         />
-        <span className="text-[11px] text-white/60">Enabled</span>
-      </label>
-      {eff.enabled && (
-        <div className="space-y-3">
-          <KeyframeSlider
-            label="Position shake"
-            start={iS}
-            end={iE}
-            min={0}
-            max={0.05}
-            step={0.001}
-            format={(v) => v.toFixed(3)}
-            onStart={(v) => setEffect(sceneIndex, effectIndex, { intensityStart: v })}
-            onEnd={(v) => setEffect(sceneIndex, effectIndex, { intensityEnd: v })}
-          />
-          <KeyframeSlider
-            label="Rotation shake"
-            start={rS}
-            end={rE}
-            min={0}
-            max={0.03}
-            step={0.001}
-            format={(v) => v.toFixed(3)}
-            onStart={(v) => setEffect(sceneIndex, effectIndex, { rotationShakeStart: v })}
-            onEnd={(v) => setEffect(sceneIndex, effectIndex, { rotationShakeEnd: v })}
-          />
-          <KeyframeSlider
-            label="Speed"
-            start={sS}
-            end={sE}
-            min={0.2}
-            max={3}
-            step={0.1}
-            format={(v) => v.toFixed(1)}
-            onStart={(v) => setEffect(sceneIndex, effectIndex, { speedStart: v })}
-            onEnd={(v) => setEffect(sceneIndex, effectIndex, { speedEnd: v })}
-          />
-        </div>
-      )}
+        <KeyframeSlider
+          label="Rotation shake"
+          start={rS}
+          end={rE}
+          min={0}
+          max={0.03}
+          step={0.001}
+          format={(v) => v.toFixed(3)}
+          onStart={(v) => setEffect(sceneIndex, effectIndex, { rotationShakeStart: v })}
+          onEnd={(v) => setEffect(sceneIndex, effectIndex, { rotationShakeEnd: v })}
+        />
+        <KeyframeSlider
+          label="Speed"
+          start={sS}
+          end={sE}
+          min={0.2}
+          max={3}
+          step={0.1}
+          format={(v) => v.toFixed(1)}
+          onStart={(v) => setEffect(sceneIndex, effectIndex, { speedStart: v })}
+          onEnd={(v) => setEffect(sceneIndex, effectIndex, { speedEnd: v })}
+        />
+      </div>
     </div>
   )
 }
@@ -457,164 +522,144 @@ export function DitherControls({
   sceneIndex,
   effectIndex,
   setEffect,
+  sidebarMode: _sidebarMode = false,
 }: {
   eff: SceneEffectDither
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
 }) {
   return (
     <div className="space-y-3">
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={eff.enabled}
-          onChange={(e) => setEffect(sceneIndex, effectIndex, { enabled: e.target.checked })}
-          className="rounded border-white/20"
-        />
-        <span className="text-[11px] text-white/60">Enabled</span>
-      </label>
-      {eff.enabled && (
-        <div className="space-y-3">
-          <div>
-            <span className="text-[11px] text-white/50 block mb-1">Preset</span>
-            <select
-              value={eff.preset}
-              onChange={(e) =>
-                setEffect(sceneIndex, effectIndex, {
-                  preset: e.target.value as SceneEffectDither['preset'],
-                })
-              }
-              className={inputClass}
-            >
-              {DITHER_PRESETS.map(({ value, label }) => (
-                <option key={value} value={value} className="bg-zinc-900">
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <span className="text-[11px] text-white/50 block mb-1">Mode</span>
-            <select
-              value={eff.mode}
-              onChange={(e) =>
-                setEffect(sceneIndex, effectIndex, {
-                  mode: e.target.value as SceneEffectDither['mode'],
-                })
-              }
-              className={inputClass}
-            >
-              {DITHER_MODES.map(({ value, label }) => (
-                <option key={value} value={value} className="bg-zinc-900">
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {eff.preset === 'custom' && (
-            <div>
-              <span className="text-[11px] text-white/50 block mb-1">
-                Levels (2–32)
-              </span>
-              <input
-                type="range"
-                min={2}
-                max={32}
-                step={1}
-                value={eff.levels}
-                onChange={(e) =>
-                  setEffect(sceneIndex, effectIndex, {
-                    levels: parseInt(e.target.value, 10),
-                  })
-                }
-                className="w-full mt-0.5"
-              />
-              <span className="text-[10px] text-white/40">{eff.levels}</span>
-            </div>
-          )}
-          <label className="block text-[11px] text-white/50">
-            Intensity (blend with original)
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={eff.intensity ?? 1}
-              onChange={(e) =>
-                setEffect(sceneIndex, effectIndex, {
-                  intensity: parseFloat(e.target.value),
-                })
-              }
-              className="w-full mt-0.5"
-            />
-            <span className="text-[10px] text-white/40">
-              {((eff.intensity ?? 1) * 100).toFixed(0)}%
-            </span>
-          </label>
-          <label className="block text-[11px] text-white/50">
-            Threshold bias (lighter / darker)
-            <input
-              type="range"
-              min={-0.3}
-              max={0.3}
-              step={0.02}
-              value={eff.thresholdBias ?? 0}
-              onChange={(e) =>
-                setEffect(sceneIndex, effectIndex, {
-                  thresholdBias: parseFloat(e.target.value),
-                })
-              }
-              className="w-full mt-0.5"
-            />
-            <span className="text-[10px] text-white/40">
-              {(eff.thresholdBias ?? 0).toFixed(2)}
-            </span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={eff.luminanceOnly ?? false}
-              onChange={(e) =>
-                setEffect(sceneIndex, effectIndex, { luminanceOnly: e.target.checked })
-              }
-              className="rounded border-white/20"
-            />
-            <span className="text-[11px] text-white/60">Luminance only (keep color)</span>
-          </label>
+      <div className="space-y-3">
+        <div>
+          <span className="text-[11px] text-white/50 block mb-1">Preset</span>
+          <select
+            value={eff.preset}
+            onChange={(e) =>
+              setEffect(sceneIndex, effectIndex, {
+                preset: e.target.value as SceneEffectDither['preset'],
+              })
+            }
+            className={inputClass}
+          >
+            {DITHER_PRESETS.map(({ value, label }) => (
+              <option key={value} value={value} className="bg-zinc-900">
+                {label}
+              </option>
+            ))}
+          </select>
         </div>
-      )}
+        <div>
+          <span className="text-[11px] text-white/50 block mb-1">Mode</span>
+          <select
+            value={eff.mode}
+            onChange={(e) =>
+              setEffect(sceneIndex, effectIndex, {
+                mode: e.target.value as SceneEffectDither['mode'],
+              })
+            }
+            className={inputClass}
+          >
+            {DITHER_MODES.map(({ value, label }) => (
+              <option key={value} value={value} className="bg-zinc-900">
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {eff.preset === 'custom' && (
+          <div>
+            <span className="text-[11px] text-white/50 block mb-1">
+              Levels (2–32)
+            </span>
+            <input
+              type="range"
+              min={2}
+              max={32}
+              step={1}
+              value={eff.levels}
+              onChange={(e) =>
+                setEffect(sceneIndex, effectIndex, {
+                  levels: parseInt(e.target.value, 10),
+                })
+              }
+              className="w-full mt-0.5"
+            />
+            <span className="text-[10px] text-white/40">{eff.levels}</span>
+          </div>
+        )}
+        <label className="block text-[11px] text-white/50">
+          Intensity (blend with original)
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={eff.intensity ?? 1}
+            onChange={(e) =>
+              setEffect(sceneIndex, effectIndex, {
+                intensity: parseFloat(e.target.value),
+              })
+            }
+            className="w-full mt-0.5"
+          />
+          <span className="text-[10px] text-white/40">
+            {((eff.intensity ?? 1) * 100).toFixed(0)}%
+          </span>
+        </label>
+        <label className="block text-[11px] text-white/50">
+          Threshold bias (lighter / darker)
+          <input
+            type="range"
+            min={-0.3}
+            max={0.3}
+            step={0.02}
+            value={eff.thresholdBias ?? 0}
+            onChange={(e) =>
+              setEffect(sceneIndex, effectIndex, {
+                thresholdBias: parseFloat(e.target.value),
+              })
+            }
+            className="w-full mt-0.5"
+          />
+          <span className="text-[10px] text-white/40">
+            {(eff.thresholdBias ?? 0).toFixed(2)}
+          </span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={eff.luminanceOnly ?? false}
+            onChange={(e) =>
+              setEffect(sceneIndex, effectIndex, { luminanceOnly: e.target.checked })
+            }
+            className="rounded border-white/20"
+          />
+          <span className="text-[11px] text-white/60">Luminance only (keep color)</span>
+        </label>
+      </div>
     </div>
   )
 }
 
 function ToggleControl({
-  eff,
-  sceneIndex,
-  effectIndex,
-  setEffect,
+  eff: _eff,
+  sceneIndex: _sceneIndex,
+  effectIndex: _effectIndex,
+  setEffect: _setEffect,
+  sidebarMode: _sidebarMode,
   children,
 }: {
   eff: { enabled: boolean }
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
   children: React.ReactNode
 }) {
-  return (
-    <div className="space-y-3">
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={eff.enabled}
-          onChange={(e) => setEffect(sceneIndex, effectIndex, { enabled: e.target.checked })}
-          className="rounded border-white/20"
-        />
-        <span className="text-[11px] text-white/60">Enabled</span>
-      </label>
-      {eff.enabled && children}
-    </div>
-  )
+  return <div className="space-y-3">{children}</div>
 }
 
 function ChromaticAberrationControls({
@@ -622,16 +667,18 @@ function ChromaticAberrationControls({
   sceneIndex,
   effectIndex,
   setEffect,
+  sidebarMode = false,
 }: {
   eff: SceneEffectChromaticAberration
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
 }) {
   const offsetStart = eff.offsetStart ?? (eff as { offset?: number }).offset ?? 0.005
   const offsetEnd = eff.offsetEnd ?? (eff as { offset?: number }).offset ?? 0.005
   return (
-    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect}>
+    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} sidebarMode={sidebarMode}>
       <div className="space-y-2">
         <label className="block text-[11px] text-white/50">
           Offset (RGB shift) — Start
@@ -690,16 +737,18 @@ function LensDistortionControls({
   sceneIndex,
   effectIndex,
   setEffect,
+  sidebarMode = false,
 }: {
   eff: SceneEffectLensDistortion
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
 }) {
   const distortionStart = eff.distortionStart ?? (eff as { distortion?: number }).distortion ?? 0.05
   const distortionEnd = eff.distortionEnd ?? (eff as { distortion?: number }).distortion ?? 0.05
   return (
-    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect}>
+    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} sidebarMode={sidebarMode}>
       <div className="space-y-2">
         <label className="block text-[11px] text-white/50">
           Distortion (barrel / pincushion) — Start
@@ -775,11 +824,13 @@ function GlitchControls({
   sceneIndex,
   effectIndex,
   setEffect,
+  sidebarMode = false,
 }: {
   eff: SceneEffectGlitch
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
 }) {
   const delayMin = eff.delayMin ?? 1.5
   const durationMin = eff.durationMin ?? 0.6
@@ -787,7 +838,7 @@ function GlitchControls({
   const length = durationToLength(durationMin)
 
   return (
-    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect}>
+    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} sidebarMode={sidebarMode}>
       <div className="space-y-2">
         <div>
           <span className="text-[11px] text-white/50 block mb-1">Mode</span>
@@ -889,14 +940,16 @@ function VignetteControls({
   sceneIndex,
   effectIndex,
   setEffect,
+  sidebarMode = false,
 }: {
   eff: SceneEffectVignette
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
 }) {
   return (
-    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect}>
+    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} sidebarMode={sidebarMode}>
       <div className="space-y-2">
         <label className="block text-[11px] text-white/50">
           Offset
@@ -936,14 +989,16 @@ function ScanlineControls({
   sceneIndex,
   effectIndex,
   setEffect,
+  sidebarMode = false,
 }: {
   eff: SceneEffectScanline
   sceneIndex: number
   effectIndex: number
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+  sidebarMode?: boolean
 }) {
   return (
-    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect}>
+    <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} sidebarMode={sidebarMode}>
       <div className="space-y-2">
         <label className="block text-[11px] text-white/50">
           Density

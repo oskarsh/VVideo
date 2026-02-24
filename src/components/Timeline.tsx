@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { useStore } from '@/store'
-import type { Scene } from '@/types'
+import type { Scene, GlobalEffectType } from '@/types'
+import { getFlyoverKeyframes } from '@/lib/flyover'
 
 /** First-frame preview for a scene; updates when trim start or video changes. */
 function SceneClipPreview({
@@ -246,6 +247,8 @@ function getSceneAutomationCurves(scene: Scene, sceneIndex: number): AutomationC
 }
 
 const AUTOMATION_LANE_HEIGHT = 28
+const AUTOMATION_LANE_HEIGHT_COLLAPSED = 20
+const AUTOMATION_LANE_HEIGHT_EXPANDED = 120
 const AUTOMATION_CURVE_COLORS = [
   'rgb(34, 211, 238)',   // cyan
   'rgb(251, 191, 36)',   // amber
@@ -276,12 +279,17 @@ export function Timeline() {
   const timelineShowAutomation = useStore((s) => s.timelineShowAutomation)
   const setTimelineShowAutomation = useStore((s) => s.setTimelineShowAutomation)
   const setEffect = useStore((s) => s.setEffect)
+  const updateScene = useStore((s) => s.updateScene)
+  const projectFps = useStore((s) => s.projectFps)
+  const setProjectFps = useStore((s) => s.setProjectFps)
 
   const [automationDrag, setAutomationDrag] = useState<{
     curve: AutomationCurve
     which: 'start' | 'end'
     segmentRect: DOMRect
   } | null>(null)
+
+  const [expandedAutomationLane, setExpandedAutomationLane] = useState<number | null>(null)
 
   const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
   const sceneStarts = project.scenes.reduce<number[]>(
@@ -292,7 +300,7 @@ export function Timeline() {
 
   const handleScrub = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect()
+      const rect = (trackRef.current ?? e.currentTarget).getBoundingClientRect()
       const x = (e.clientX - rect.left) / rect.width
       const t = Math.max(0, Math.min(totalDuration, x * totalDuration))
       setCurrentTime(t)
@@ -303,14 +311,6 @@ export function Timeline() {
       if (idx >= 0) setCurrentSceneIndex(idx)
     },
     [totalDuration, sceneStarts, setCurrentTime, setCurrentSceneIndex]
-  )
-
-  const handleClipClick = useCallback(
-    (i: number) => {
-      setCurrentSceneIndex(i)
-      setCurrentTime(sceneStarts[i])
-    },
-    [sceneStarts, setCurrentSceneIndex, setCurrentTime]
   )
 
   const rulerTicks = getRulerTicks(totalDuration)
@@ -373,12 +373,68 @@ export function Timeline() {
 
   const curvesPerScene = project.scenes.map((sc, i) => getSceneAutomationCurves(sc, i))
   const maxLanes = Math.max(1, ...curvesPerScene.map((c) => c.length))
-  const automationHeight = maxLanes * AUTOMATION_LANE_HEIGHT
+  const laneHeights = Array.from({ length: maxLanes }, (_, i) =>
+    expandedAutomationLane === i
+      ? AUTOMATION_LANE_HEIGHT_EXPANDED
+      : expandedAutomationLane != null
+        ? AUTOMATION_LANE_HEIGHT_COLLAPSED
+        : AUTOMATION_LANE_HEIGHT
+  )
+  const laneTops = laneHeights.reduce<number[]>((acc, _h, i) => {
+    acc.push(i === 0 ? 0 : acc[i - 1] + laneHeights[i - 1])
+    return acc
+  }, [])
+  const automationHeight = laneHeights.reduce((a, b) => a + b, 0)
+
+  const globalKeyframeMarkers: { time: number; type: GlobalEffectType }[] = []
+  const globalEffects = project.globalEffects ?? {}
+    ; (Object.keys(globalEffects) as GlobalEffectType[]).forEach((type) => {
+      const track = globalEffects[type]
+      if (track?.keyframes?.length) {
+        track.keyframes.forEach((kf) => {
+          globalKeyframeMarkers.push({ time: kf.time, type })
+        })
+      }
+    })
+  const hasGlobalKeyframes = globalKeyframeMarkers.length > 0
+
+  // Per-scene camera (flyover) keyframes for keyframe editor
+  const cameraKeyframeMarkers: { time: number; sceneIndex: number }[] = []
+  project.scenes.forEach((sc, sceneIndex) => {
+    const kfs = getFlyoverKeyframes(sc)
+    const start = sceneStarts[sceneIndex] ?? 0
+    const duration = sc.durationSeconds
+    kfs.forEach((kf) => {
+      cameraKeyframeMarkers.push({ time: start + kf.time * duration, sceneIndex })
+    })
+  })
+  const hasCameraKeyframes = cameraKeyframeMarkers.length > 0
+
+  const currentScene = project.scenes[currentSceneIndex]
+  const sceneStartTime = sceneStarts[currentSceneIndex] ?? 0
+  const sceneLocalTime = currentTime - sceneStartTime
+  const currentFrame = Math.floor(currentTime * projectFps)
+  const totalFrames = Math.floor(totalDuration * projectFps)
+  const sceneDurationFrames = currentScene ? Math.floor(currentScene.durationSeconds * projectFps) : 0
+  const sceneLocalFrame = Math.floor(sceneLocalTime * projectFps)
+
+  const globalEffectLabel: Record<GlobalEffectType, string> = {
+    camera: 'Camera',
+    grain: 'Grain',
+    dither: 'Dither',
+    dof: 'DoF',
+    handheld: 'Handheld',
+    chromaticAberration: 'Chromatic',
+    lensDistortion: 'Lens',
+    glitch: 'Glitch',
+    vignette: 'Vignette',
+    scanline: 'Scanline',
+  }
 
   return (
-    <div className="flex flex-col border-t border-white/10 bg-zinc-900/95">
+    <div className="flex flex-col min-w-0 overflow-x-hidden border-t border-white/10 bg-zinc-900/95">
       {/* Transport */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-white/10 min-w-0">
         <button
           type="button"
           onClick={() => setPlaying(!isPlaying)}
@@ -430,15 +486,60 @@ export function Timeline() {
         >
           📈
         </button>
-        <span className="text-xs text-white/60 tabular-nums ml-1">
+        <span className="text-xs text-white/60 tabular-nums ml-1" title={`${formatTime(currentTime)} / ${formatTime(totalDuration)}`}>
+          Frame {currentFrame} / {totalFrames}
+        </span>
+        <span className="text-[10px] text-white/40 tabular-nums">
           {formatTime(currentTime)} / {formatTime(totalDuration)}
         </span>
+        {currentScene && (
+          <>
+            <span className="text-[10px] text-white/40 ml-2">Scene duration</span>
+            <input
+              type="number"
+              min={0.5}
+              step={0.5}
+              value={currentScene.durationSeconds}
+              onChange={(e) =>
+                updateScene(currentSceneIndex, {
+                  durationSeconds: Math.max(0.5, parseFloat(e.target.value) || 0.5),
+                })
+              }
+              className="w-14 px-1.5 py-0.5 rounded bg-white/10 border border-white/10 text-[10px] text-white tabular-nums"
+              title="Current scene duration (seconds)"
+            />
+            <span className="text-[10px] text-white/40">s</span>
+            <span className="text-[10px] text-white/30 ml-1" title="Frames in current scene">
+              ({sceneLocalFrame} / {sceneDurationFrames} frames)
+            </span>
+          </>
+        )}
+        <div className="ml-2 flex items-center gap-0.5">
+          <span className="text-[10px] text-white/40">fps</span>
+          {[24, 30, 60].map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setProjectFps(f)}
+              className={`px-1.5 py-0.5 rounded text-[10px] font-medium tabular-nums ${projectFps === f ? 'bg-white/20 text-white' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+              title={`${f} fps`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Ruler */}
       <div
-        className="h-6 px-2 flex items-end border-b border-white/10 relative bg-zinc-800/80"
+        className="h-6 px-2 flex items-end border-b border-white/10 relative bg-zinc-800/80 cursor-pointer"
         style={{ minHeight: 24 }}
+        onClick={handleScrub}
+        role="slider"
+        aria-valuenow={currentTime}
+        aria-valuemin={0}
+        aria-valuemax={totalDuration}
+        title="Click to move playhead"
       >
         {rulerTicks.map(({ time, isMajor }) => (
           <div
@@ -491,9 +592,9 @@ export function Timeline() {
                 }}
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleClipClick(i)
+                  handleScrub(e)
                 }}
-                title={`Scene ${i + 1} · ${formatTime(sc.durationSeconds)} — drag to reorder`}
+                title={`Scene ${i + 1} · ${formatTime(sc.durationSeconds)} — click to seek, drag to reorder`}
               >
                 {/* Base scene color for most of the clip */}
                 <div
@@ -540,6 +641,58 @@ export function Timeline() {
             />
           </div>
 
+          {/* Global effect keyframe markers */}
+          {hasGlobalKeyframes && (
+            <div
+              className="h-6 rounded bg-zinc-900/70 border border-white/5 cursor-pointer relative flex items-center"
+              onClick={handleScrub}
+              title="Global effect keyframes — click to seek"
+            >
+              {globalKeyframeMarkers.map(({ time, type }, idx) => (
+                <button
+                  key={`${type}-${time}-${idx}`}
+                  type="button"
+                  className="absolute w-2 h-2 rounded-full bg-cyan-500/90 hover:bg-cyan-400 hover:scale-125 z-10 border border-white/30 -translate-x-1/2"
+                  style={{ left: `${(time / totalDuration) * 100}%` }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setCurrentTime(time)
+                    const i = sceneStarts.findIndex((start, j) => {
+                      const end = sceneStarts[j + 1] ?? totalDuration
+                      return time >= start && time < end
+                    })
+                    if (i >= 0) setCurrentSceneIndex(i)
+                  }}
+                  title={`${globalEffectLabel[type]} @ ${formatTime(time)}`}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Per-scene camera (flyover) keyframe markers */}
+          {hasCameraKeyframes && (
+            <div
+              className="h-6 rounded bg-zinc-900/70 border border-white/5 cursor-pointer relative flex items-center"
+              onClick={handleScrub}
+              title="Scene camera keyframes — click to seek"
+            >
+              {cameraKeyframeMarkers.map(({ time, sceneIndex }, idx) => (
+                <button
+                  key={`cam-${sceneIndex}-${time}-${idx}`}
+                  type="button"
+                  className="absolute w-2 h-2 rounded-full bg-amber-400/90 hover:bg-amber-300 hover:scale-125 z-10 border border-white/30 -translate-x-1/2"
+                  style={{ left: `${(time / totalDuration) * 100}%` }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setCurrentTime(time)
+                    setCurrentSceneIndex(sceneIndex)
+                  }}
+                  title={`Camera @ ${formatTime(time)}`}
+                />
+              ))}
+            </div>
+          )}
+
           {/* Automation curves: multiple lanes, one per curve; drag handles at start/end */}
           <div
             className="overflow-hidden rounded-lg transition-all duration-300 ease-out"
@@ -557,11 +710,24 @@ export function Timeline() {
               {Array.from({ length: maxLanes }, (_, laneIndex) => (
                 <div
                   key={laneIndex}
-                  className="absolute left-0 right-0 border-b border-white/5 last:border-0"
+                  role="button"
+                  tabIndex={0}
+                  className={`absolute left-0 right-0 border-b border-white/5 last:border-0 transition-all duration-200 ${expandedAutomationLane === laneIndex ? 'ring-1 ring-amber-400/50 rounded z-10' : ''}`}
                   style={{
-                    top: laneIndex * AUTOMATION_LANE_HEIGHT,
-                    height: AUTOMATION_LANE_HEIGHT,
+                    top: laneTops[laneIndex],
+                    height: laneHeights[laneIndex],
                   }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setExpandedAutomationLane((prev) => (prev === laneIndex ? null : laneIndex))
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setExpandedAutomationLane((prev) => (prev === laneIndex ? null : laneIndex))
+                    }
+                  }}
+                  title={expandedAutomationLane === laneIndex ? 'Click to collapse lane' : 'Click to expand lane for detail'}
                 >
                   {project.scenes.map((sc, i) => {
                     const curves = curvesPerScene[i]

@@ -1,6 +1,15 @@
 import { create } from 'zustand'
-import type { Project, Scene, FlyoverKeyframe, SceneEffectDither, PlaneMedia } from '@/types'
-import { createDefaultProject, createDefaultScene, DEFAULT_DITHER } from '@/types'
+import type { Project, Scene, FlyoverKeyframeWithTime, SceneEffectDither, PlaneMedia, Pane, GlobalEffectType, GlobalEffectTrack, GlobalEffectKeyframe, BackgroundTexture } from '@/types'
+import { createDefaultProject, createDefaultScene, createDefaultPane, createDefaultSceneText, DEFAULT_DITHER, getPlaneMedia } from '@/types'
+import { DEFAULT_GLOBAL_KEYFRAMES } from '@/lib/globalEffects'
+import { getBuiltInPresets, applyPresetKeepKeyframes } from '@/lib/presets'
+
+function getInitialProject(): Project {
+  const empty = createDefaultProject()
+  const builtin = getBuiltInPresets()
+  const defaultPreset = builtin[0]
+  return defaultPreset ? applyPresetKeepKeyframes(defaultPreset, empty) : empty
+}
 
 /** Snapshot of undoable state for history. */
 export interface HistorySnapshot {
@@ -70,22 +79,43 @@ interface EditorState {
   updateScene: (index: number, patch: Partial<Scene>) => void
   setProjectAspectRatio: (ratio: [number, number]) => void
   setProjectBackgroundVideo: (url: string | null) => void
+  setProjectBackgroundTexture: (t: BackgroundTexture | null) => void
+  setProjectBackgroundVideoContinuous: (v: boolean) => void
   setProjectPlaneVideo: (url: string | null) => void
   setProjectPlaneMedia: (media: PlaneMedia | null) => void
   setProjectPlaneExtrusionDepth: (depth: number) => void
   setProjectPlaneSvgColor: (color: string | null) => void
   setBackgroundTrim: (sceneIndex: number, trim: { start: number; end: number } | null, endClaimed?: boolean) => void
   setPlaneTrim: (sceneIndex: number, trim: { start: number; end: number } | null, endClaimed?: boolean) => void
+  addPane: () => void
+  addPaneWithMedia: (media: PlaneMedia) => void
+  removePane: (paneId: string) => void
+  updatePane: (paneId: string, patch: Partial<Pane>) => void
+  reorderPanes: (fromIndex: number, toIndex: number) => void
+  setPaneTrim: (sceneIndex: number, paneId: string, trim: { start: number; end: number } | null, endClaimed?: boolean) => void
+  addSceneText: (sceneIndex: number) => void
   setFlyoverEnabled: (sceneIndex: number, enabled: boolean) => void
-  setFlyoverKeyframes: (sceneIndex: number, start: FlyoverKeyframe, end: FlyoverKeyframe) => void
+  addFlyoverKeyframe: (sceneIndex: number, keyframe: FlyoverKeyframeWithTime) => void
+  removeFlyoverKeyframe: (sceneIndex: number, index: number) => void
+  updateFlyoverKeyframe: (sceneIndex: number, index: number, patch: Partial<FlyoverKeyframeWithTime>) => void
   flyoverEditMode: boolean
   setFlyoverEditMode: (v: boolean) => void
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
   setProjectDither: (patch: Partial<SceneEffectDither>) => void
+  /** Global effect tracks (keyframes on project timeline). */
+  setGlobalEffectTrack: (effectType: GlobalEffectType, track: GlobalEffectTrack | null) => void
+  addGlobalEffectKeyframe: (effectType: GlobalEffectType, keyframe: GlobalEffectKeyframe) => void
+  removeGlobalEffectKeyframe: (effectType: GlobalEffectType, index: number) => void
+  updateGlobalEffectKeyframe: (effectType: GlobalEffectType, index: number, patch: Partial<GlobalEffectKeyframe>) => void
+  /** Add or update keyframe at given time (merge patch into existing or create new). */
+  setGlobalEffectKeyframeAtTime: (effectType: GlobalEffectType, time: number, patch: Partial<GlobalEffectKeyframe>) => void
   resetProject: () => void
   /** When trim editor is open: which video is being edited and time to show in main canvas. */
   trimScrub: { video: 'background' | 'plane'; time: number } | null
   setTrimScrub: (value: { video: 'background' | 'plane'; time: number } | null) => void
+  /** Which trim editor modal is open (single owner). null = closed. */
+  trimEditorOpen: 'background' | 'plane' | null
+  setTrimEditorOpen: (v: 'background' | 'plane' | null) => void
   /** Current camera in flyover edit mode; used to show if Start/End buttons are "at" keyframe. */
   flyoverEditCamera: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null
   setFlyoverEditCamera: (v: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null) => void
@@ -95,15 +125,18 @@ interface EditorState {
   /** When true, timeline shows automation curves for effect keyframes (start/end params). */
   timelineShowAutomation: boolean
   setTimelineShowAutomation: (v: boolean) => void
+  /** Frames per second for timeline frame display and export. Default 30. */
+  projectFps: number
+  setProjectFps: (fps: number) => void
 }
 
 export const useStore = create<EditorState>((set) => ({
-  project: createDefaultProject(),
+  project: getInitialProject(),
   currentSceneIndex: 0,
   currentTime: 0,
   isPlaying: false,
   isExporting: false,
-  loopCurrentScene: true,
+  loopCurrentScene: false,
   exportRenderMode: 'full',
   exportHeight: 720,
   setExportHeight: (h) => set({ exportHeight: h }),
@@ -242,7 +275,19 @@ export const useStore = create<EditorState>((set) => ({
   setProjectBackgroundVideo: (url) =>
     set(
       withHistory((s) => ({
-        project: { ...s.project, backgroundVideoUrl: url },
+        project: { ...s.project, backgroundVideoUrl: url, backgroundTexture: null },
+      }))
+    ),
+  setProjectBackgroundTexture: (t) =>
+    set(
+      withHistory((s) => ({
+        project: { ...s.project, backgroundTexture: t ?? undefined, backgroundVideoUrl: t ? null : s.project.backgroundVideoUrl },
+      }))
+    ),
+  setProjectBackgroundVideoContinuous: (v) =>
+    set(
+      withHistory((s) => ({
+        project: { ...s.project, backgroundVideoContinuous: v },
       }))
     ),
   setProjectPlaneVideo: (url) =>
@@ -319,6 +364,130 @@ export const useStore = create<EditorState>((set) => ({
         },
       }))
     ),
+  addPane: () =>
+    set(
+      withHistory((s) => {
+        const panes = s.project.panes ?? []
+        const newPane = createDefaultPane(crypto.randomUUID())
+        newPane.zIndex = panes.length
+        if (panes.length === 0) {
+          const legacy = getPlaneMedia(s.project)
+          if (legacy) {
+            newPane.media = legacy
+            newPane.extrusionDepth = s.project.planeExtrusionDepth ?? 0
+            newPane.planeSvgColor = s.project.planeSvgColor ?? null
+          }
+        }
+        return {
+          project: {
+            ...s.project,
+            panes: [...panes, newPane],
+          },
+        }
+      })
+    ),
+  addPaneWithMedia: (media) =>
+    set(
+      withHistory((s) => {
+        const panes = s.project.panes ?? []
+        const newPane = createDefaultPane(crypto.randomUUID())
+        newPane.zIndex = panes.length
+        newPane.media = media
+        newPane.extrusionDepth = s.project.planeExtrusionDepth ?? 0
+        newPane.planeSvgColor = s.project.planeSvgColor ?? null
+        return {
+          project: {
+            ...s.project,
+            panes: [...panes, newPane],
+          },
+        }
+      })
+    ),
+  removePane: (paneId) =>
+    set(
+      withHistory((s) => {
+        const panes = (s.project.panes ?? []).filter((p) => p.id !== paneId)
+        const scenes = s.project.scenes.map((sc) => {
+          const trims = { ...(sc.paneTrims ?? {}) }
+          delete trims[paneId]
+          return { ...sc, paneTrims: Object.keys(trims).length ? trims : undefined }
+        })
+        return {
+          project: {
+            ...s.project,
+            panes,
+            scenes,
+          },
+        }
+      })
+    ),
+  updatePane: (paneId, patch) =>
+    set(
+      withHistory((s) => ({
+        project: {
+          ...s.project,
+          panes: (s.project.panes ?? []).map((p) =>
+            p.id === paneId ? { ...p, ...patch } : p
+          ),
+        },
+      }))
+    ),
+  reorderPanes: (fromIndex, toIndex) =>
+    set(
+      withHistory((s) => {
+        const panes = [...(s.project.panes ?? [])]
+        if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= panes.length || toIndex >= panes.length)
+          return s
+        const [removed] = panes.splice(fromIndex, 1)
+        panes.splice(toIndex, 0, removed)
+        const withZ = panes.map((p, i) => ({ ...p, zIndex: i }))
+        return {
+          project: { ...s.project, panes: withZ },
+        }
+      })
+    ),
+  setPaneTrim: (sceneIndex, paneId, trim, endClaimed) =>
+    set(
+      withHistory((s) => ({
+        project: {
+          ...s.project,
+          scenes: s.project.scenes.map((sc, i) =>
+            i !== sceneIndex
+              ? sc
+              : {
+                ...sc,
+                paneTrims: {
+                  ...(sc.paneTrims ?? {}),
+                  [paneId]: trim,
+                },
+                ...(trim === null
+                  ? {}
+                  : endClaimed === true
+                    ? {}
+                    : {}),
+              }
+          ),
+        },
+      }))
+    ),
+  addSceneText: (sceneIndex) =>
+    set(
+      withHistory((s) => {
+        const scene = s.project.scenes[sceneIndex]
+        if (!scene) return s
+        const texts = scene.texts ?? []
+        return {
+          project: {
+            ...s.project,
+            scenes: s.project.scenes.map((sc, i) =>
+              i === sceneIndex
+                ? { ...sc, texts: [...texts, createDefaultSceneText(crypto.randomUUID())] }
+                : sc
+            ),
+          },
+        }
+      })
+    ),
   setFlyoverEnabled: (sceneIndex, enabled) =>
     set(
       withHistory((s) => ({
@@ -332,18 +501,62 @@ export const useStore = create<EditorState>((set) => ({
         },
       }))
     ),
-  setFlyoverKeyframes: (sceneIndex, start, end) =>
+  addFlyoverKeyframe: (sceneIndex, keyframe) =>
     set(
-      withHistory((s) => ({
-        project: {
-          ...s.project,
-          scenes: s.project.scenes.map((sc, i) =>
-            i === sceneIndex && sc.flyover
-              ? { ...sc, flyover: { ...sc.flyover, start, end } }
-              : sc
-          ),
-        },
-      }))
+      withHistory((s) => {
+        const sc = s.project.scenes[sceneIndex]
+        const flyover = sc?.flyover ?? { enabled: true, keyframes: [] }
+        const keyframes = [...(flyover.keyframes ?? []), keyframe].sort((a, b) => a.time - b.time)
+        return {
+          project: {
+            ...s.project,
+            scenes: s.project.scenes.map((scene, i) =>
+              i === sceneIndex
+                ? { ...scene, flyover: { ...flyover, keyframes } }
+                : scene
+            ),
+          },
+        }
+      })
+    ),
+  removeFlyoverKeyframe: (sceneIndex, index) =>
+    set(
+      withHistory((s) => {
+        const sc = s.project.scenes[sceneIndex]
+        const flyover = sc?.flyover
+        if (!flyover?.keyframes?.length) return {}
+        const keyframes = flyover.keyframes.filter((_, i) => i !== index)
+        return {
+          project: {
+            ...s.project,
+            scenes: s.project.scenes.map((scene, i) =>
+              i === sceneIndex ? { ...scene, flyover: { ...flyover, keyframes } } : scene
+            ),
+          },
+        }
+      })
+    ),
+  updateFlyoverKeyframe: (sceneIndex, index, patch) =>
+    set(
+      withHistory((s) => {
+        const sc = s.project.scenes[sceneIndex]
+        const flyover = sc?.flyover
+        if (!flyover?.keyframes?.[index]) return {}
+        const keyframes = flyover.keyframes.map((k, i) =>
+          i === index ? { ...k, ...patch } : k
+        )
+        if ('time' in patch && typeof patch.time === 'number') {
+          keyframes.sort((a, b) => a.time - b.time)
+        }
+        return {
+          project: {
+            ...s.project,
+            scenes: s.project.scenes.map((scene, i) =>
+              i === sceneIndex ? { ...scene, flyover: { ...flyover, keyframes } } : scene
+            ),
+          },
+        }
+      })
     ),
   flyoverEditMode: true,
   setFlyoverEditMode: (v) => set({ flyoverEditMode: v, ...(v ? {} : { flyoverEditCamera: null }) }),
@@ -374,9 +587,108 @@ export const useStore = create<EditorState>((set) => ({
         },
       }))
     ),
+  setGlobalEffectTrack: (effectType, track) =>
+    set(
+      withHistory((s) => ({
+        project: {
+          ...s.project,
+          globalEffects: {
+            ...(s.project.globalEffects ?? {}),
+            [effectType]: track ?? undefined,
+          } as Project['globalEffects'],
+        },
+      }))
+    ),
+  addGlobalEffectKeyframe: (effectType, keyframe) =>
+    set(
+      withHistory((s) => {
+        const prev = s.project.globalEffects?.[effectType]
+        const keyframes = prev?.keyframes ?? []
+        const next = [...keyframes, keyframe].sort((a, b) => a.time - b.time)
+        return {
+          project: {
+            ...s.project,
+            globalEffects: {
+              ...(s.project.globalEffects ?? {}),
+              [effectType]: {
+                enabled: prev?.enabled ?? true,
+                keyframes: next,
+              },
+            } as Project['globalEffects'],
+          },
+        }
+      })
+    ),
+  removeGlobalEffectKeyframe: (effectType, index) =>
+    set(
+      withHistory((s) => {
+        const prev = s.project.globalEffects?.[effectType]
+        if (!prev?.keyframes?.length) return s
+        const keyframes = prev.keyframes.filter((_, i) => i !== index)
+        return {
+          project: {
+            ...s.project,
+            globalEffects: {
+              ...(s.project.globalEffects ?? {}),
+              [effectType]:
+                keyframes.length > 0
+                  ? { enabled: prev.enabled, keyframes }
+                  : undefined,
+            } as Project['globalEffects'],
+          },
+        }
+      })
+    ),
+  updateGlobalEffectKeyframe: (effectType, index, patch) =>
+    set(
+      withHistory((s) => {
+        const prev = s.project.globalEffects?.[effectType]
+        if (!prev?.keyframes?.[index]) return s
+        const keyframes = prev.keyframes.map((k, i) =>
+          i === index ? { ...k, ...patch } : k
+        )
+        return {
+          project: {
+            ...s.project,
+            globalEffects: {
+              ...(s.project.globalEffects ?? {}),
+              [effectType]: { enabled: prev.enabled, keyframes },
+            } as Project['globalEffects'],
+          },
+        }
+      })
+    ),
+  setGlobalEffectKeyframeAtTime: (effectType, time, patch) =>
+    set(
+      withHistory((s) => {
+        const prev = s.project.globalEffects?.[effectType]
+        const keyframes = [...(prev?.keyframes ?? [])]
+        const TIME_EPS = 0.001
+        const idx = keyframes.findIndex((k) => Math.abs(k.time - time) < TIME_EPS)
+        const defaultKf = { ...DEFAULT_GLOBAL_KEYFRAMES[effectType], time } as GlobalEffectKeyframe
+        if (idx >= 0) {
+          keyframes[idx] = { ...keyframes[idx], ...patch } as GlobalEffectKeyframe
+        } else {
+          keyframes.push({ ...defaultKf, ...patch, time } as GlobalEffectKeyframe)
+          keyframes.sort((a, b) => a.time - b.time)
+        }
+        return {
+          project: {
+            ...s.project,
+            globalEffects: {
+              ...(s.project.globalEffects ?? {}),
+              [effectType]: {
+                enabled: prev?.enabled ?? true,
+                keyframes,
+              },
+            } as Project['globalEffects'],
+          },
+        }
+      })
+    ),
   resetProject: () =>
     set({
-      project: createDefaultProject(),
+      project: getInitialProject(),
       currentSceneIndex: 0,
       currentTime: 0,
       historyPast: [],
@@ -384,10 +696,14 @@ export const useStore = create<EditorState>((set) => ({
     }),
   trimScrub: null,
   setTrimScrub: (value) => set({ trimScrub: value }),
+  trimEditorOpen: null,
+  setTrimEditorOpen: (v) => set({ trimEditorOpen: v }),
   flyoverEditCamera: null,
   setFlyoverEditCamera: (v) => set({ flyoverEditCamera: v }),
   flyoverJumpToStart: false,
   setFlyoverJumpToStart: (v) => set({ flyoverJumpToStart: v }),
   timelineShowAutomation: false,
   setTimelineShowAutomation: (v) => set({ timelineShowAutomation: v }),
+  projectFps: 30,
+  setProjectFps: (fps) => set({ projectFps: Math.max(1, Math.min(120, Math.round(fps))) }),
 }))

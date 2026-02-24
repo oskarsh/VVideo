@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, Suspense, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import {
   EffectComposer,
   DepthOfField,
@@ -17,6 +18,7 @@ import { useStore } from '@/store'
 import { setFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyKeys, setFlyKey, isFlyKey } from '@/flyKeys'
 import { applyFlyoverEasing } from '@/easing'
+import { getFlyoverKeyframes } from '@/lib/flyover'
 import { DitherEffect } from '@/effects/DitherEffect'
 import { LensDistortion } from '@/effects/LensDistortionEffect'
 import type {
@@ -32,9 +34,14 @@ import type {
   SceneEffectVignette,
   SceneEffectScanline,
   SceneText,
+  Pane,
+  BackgroundTexture,
 } from '@/types'
-import { getPlaneMedia } from '@/types'
+import { getPlaneMedia, getPanesForRender } from '@/types'
 import { getHandheldOffsets } from '@/utils/smoothNoise'
+import { getGlobalEffectStateAtTime } from '@/lib/globalEffects'
+import { generateBackgroundTextureDataUrl } from '@/lib/backgroundTexture'
+import { createNoiseMaterial, createDotsMaterial } from '@/lib/backgroundShaders'
 
 const FOV_DEG = 50
 
@@ -46,6 +53,8 @@ function BackgroundVideo({
   scrubTime,
   playbackMode,
   speed,
+  continuous: _continuous,
+  globalTime: _globalTime,
 }: {
   url: string
   trim: { start: number; end: number } | null
@@ -55,6 +64,9 @@ function BackgroundVideo({
   scrubTime?: number | null
   playbackMode: 'normal' | 'fitScene'
   speed: number
+  /** When true, use globalTime and ignore trim/scene; video plays continuously across scenes. */
+  continuous?: boolean
+  globalTime?: number
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
   const [texture, setTexture] = useState<THREE.VideoTexture | null>(null)
@@ -91,6 +103,11 @@ function BackgroundVideo({
       return
     }
     const dur = Math.max(0.001, video.duration || 1)
+    if (_continuous && _globalTime != null) {
+      const effectiveTime = _globalTime * Math.max(0.1, speed)
+      video.currentTime = effectiveTime % dur
+      return
+    }
     if (playbackMode === 'fitScene' && sceneDuration > 0) {
       if (trim) {
         const span = Math.max(0.001, trim.end - trim.start)
@@ -119,6 +136,96 @@ function BackgroundVideo({
     <mesh ref={meshRef} position={[0, 0, 0]}>
       <sphereGeometry args={[skyRadius, 32, 24]} />
       <meshBasicMaterial map={texture} side={THREE.BackSide} />
+    </mesh>
+  )
+}
+
+function BackgroundTextureMesh({
+  config,
+  viewAspect,
+  globalTime,
+}: {
+  config: BackgroundTexture
+  viewAspect: number
+  globalTime: number
+}) {
+  const dataUrl = useMemo(
+    () => (config.type === 'gradient' || config.type === 'terrain' ? generateBackgroundTextureDataUrl(config) : ''),
+    [config]
+  )
+  const [texture, setTexture] = useState<THREE.Texture | null>(null)
+  const texRef = useRef<THREE.Texture | null>(null)
+  const meshRef = useRef<THREE.Mesh>(null)
+
+  const shaderMaterial = useMemo(() => {
+    if (config.type === 'noise') return createNoiseMaterial(config, 0)
+    if (config.type === 'dots') return createDotsMaterial(config, 0)
+    return null
+  }, [config])
+
+  useEffect(() => {
+    return () => {
+      if (shaderMaterial) shaderMaterial.dispose()
+    }
+  }, [shaderMaterial])
+
+  useEffect(() => {
+    if (config.type !== 'gradient' && config.type !== 'terrain') return
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      if (texRef.current) texRef.current.dispose()
+      const tex = new THREE.Texture(img)
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+      tex.repeat.set(3, 3)
+      tex.needsUpdate = true
+      tex.minFilter = THREE.LinearFilter
+      tex.magFilter = THREE.LinearFilter
+      texRef.current = tex
+      setTexture(tex)
+    }
+    img.src = dataUrl
+    return () => {
+      if (texRef.current) {
+        texRef.current.dispose()
+        texRef.current = null
+      }
+      setTexture(null)
+    }
+  }, [dataUrl, config.type])
+
+  useFrame(() => {
+    if (config.type === 'noise' && shaderMaterial?.uniforms?.uTime) {
+      const speed = (config.speed ?? 1) * 0.5
+      shaderMaterial.uniforms.uTime.value = globalTime * speed
+    } else if (config.type === 'dots' && shaderMaterial?.uniforms?.uTime) {
+      const speed = config.speed ?? 1
+      shaderMaterial.uniforms.uTime.value = globalTime * speed
+    } else if ((config.type === 'gradient' || config.type === 'terrain') && texRef.current) {
+      const speed = (config.speed ?? 1) * 0.15
+      texRef.current.offset.y = (globalTime * speed) % 1
+    }
+  })
+
+  if (config.type === 'noise' || config.type === 'dots') {
+    if (!shaderMaterial) return null
+    const scaleX = 10 * viewAspect
+    const scaleY = 10
+    return (
+      <mesh ref={meshRef} position={[0, 0, -2]} scale={[scaleX, scaleY, 1]}>
+        <planeGeometry args={[1, 1]} />
+        <primitive object={shaderMaterial} attach="material" />
+      </mesh>
+    )
+  }
+
+  if (!texture) return null
+  const scaleX = 10 * viewAspect
+  const scaleY = 10
+  return (
+    <mesh position={[0, 0, -2]} scale={[scaleX, scaleY, 1]}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial map={texture} side={THREE.DoubleSide} />
     </mesh>
   )
 }
@@ -309,10 +416,41 @@ function PlaneSVG({
     scale: number
   } | null>(null)
   const meshesRef = useRef<typeof svgState>(null)
+  const [fallbackTexture, setFallbackTexture] = useState<THREE.Texture | null>(null)
+  const [fallbackAspect, setFallbackAspect] = useState(1)
+  const fallbackTexRef = useRef<THREE.Texture | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const loader = new SVGLoader()
+    const useTextureFallback = () => {
+      if (cancelled) return
+      const texLoader = new THREE.TextureLoader()
+      texLoader.load(
+        url,
+        (tex) => {
+          if (cancelled) {
+            tex.dispose()
+            return
+          }
+          tex.colorSpace = THREE.SRGBColorSpace
+          tex.minFilter = THREE.LinearFilter
+          tex.magFilter = THREE.LinearFilter
+          fallbackTexRef.current?.dispose()
+          fallbackTexRef.current = tex
+          setFallbackTexture(tex)
+          const img = tex.image as HTMLImageElement
+          if (img?.naturalWidth && img.naturalHeight) {
+            setFallbackAspect(img.naturalWidth / img.naturalHeight)
+          }
+        },
+        undefined,
+        () => {
+          if (!cancelled) setFallbackTexture(null)
+        }
+      )
+    }
+
     loader.load(
       url,
       (data) => {
@@ -324,12 +462,21 @@ function PlaneSVG({
           })
           meshesRef.current = null
         }
+        fallbackTexRef.current?.dispose()
+        fallbackTexRef.current = null
+        setFallbackTexture(null)
+
         const paths: Array<{ shapes: THREE.Shape[]; color: THREE.Color }> = []
         for (const path of data.paths) {
           const shapes = path.toShapes(true)
           if (shapes.length > 0) {
             paths.push({ shapes, color: path.color.clone() })
           }
+        }
+        if (paths.length === 0) {
+          setSvgState(null)
+          useTextureFallback()
+          return
         }
         const svg = data.xml.documentElement
         let viewBox = { minX: 0, minY: 0, width: 100, height: 100 }
@@ -382,7 +529,10 @@ function PlaneSVG({
       },
       undefined,
       () => {
-        if (!cancelled) setSvgState(null)
+        if (!cancelled) {
+          setSvgState(null)
+          useTextureFallback()
+        }
       }
     )
     return () => {
@@ -394,8 +544,33 @@ function PlaneSVG({
         })
         meshesRef.current = null
       }
+      fallbackTexRef.current?.dispose()
+      fallbackTexRef.current = null
+      setFallbackTexture(null)
     }
   }, [url, extrusionDepth, colorOverride])
+
+  if (fallbackTexture) {
+    const scaleX = fallbackAspect >= 1 ? BASE_PLANE_SIZE : BASE_PLANE_SIZE * fallbackAspect
+    const scaleY = fallbackAspect >= 1 ? BASE_PLANE_SIZE / fallbackAspect : BASE_PLANE_SIZE
+    const depth = Math.max(0, extrusionDepth)
+    return (
+      <mesh position={[0, 0, 0]} scale={[scaleX, scaleY, depth > 0 ? depth : 1]}>
+        {depth > 0 ? (
+          <boxGeometry args={[1, 1, 1]} />
+        ) : (
+          <planeGeometry args={[1, 1]} />
+        )}
+        <meshBasicMaterial
+          map={fallbackTexture}
+          side={THREE.DoubleSide}
+          transparent
+          alphaTest={0.01}
+          depthWrite={true}
+        />
+      </mesh>
+    )
+  }
 
   if (!svgState || svgState.meshes.length === 0) return null
   const { meshes, scale } = svgState
@@ -476,75 +651,168 @@ function TextPlane3D({ text }: { text: SceneText }) {
   )
 }
 
+function lerpPos(a: [number, number, number], b: [number, number, number], t: number): [number, number, number] {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+}
+
+function SinglePane({
+  pane,
+  scene,
+  sceneLocalTime,
+  sceneDuration,
+  scrubTime,
+}: {
+  pane: Pane
+  scene: SceneType
+  sceneLocalTime: number
+  sceneDuration: number
+  scrubTime: number | null
+}) {
+  const anim = pane.animation
+  const t = sceneDuration > 0 ? Math.min(1, Math.max(0, sceneLocalTime / sceneDuration)) : 0
+  const position: [number, number, number] = anim
+    ? lerpPos(anim.positionStart, anim.positionEnd, t)
+    : pane.position
+  const scale = anim ? anim.scaleStart + (anim.scaleEnd - anim.scaleStart) * t : pane.scale
+  const rotation: [number, number, number] = anim
+    ? (lerpPos(anim.rotationStart, anim.rotationEnd, t) as [number, number, number])
+    : pane.rotation
+
+  const trim = scene.paneTrims?.[pane.id] ?? scene.planeTrim ?? null
+  const { media, extrusionDepth, planeSvgColor } = pane
+
+  if (!media.url) return null
+
+  return (
+    <group position={position} scale={[scale, scale, scale]} rotation={rotation}>
+      {media.type === 'video' && (
+        <PlaneVideo
+          url={media.url}
+          trim={trim}
+          sceneLocalTime={sceneLocalTime}
+          sceneDuration={sceneDuration}
+          scrubTime={scrubTime}
+          playbackMode={scene.planeVideoPlaybackMode ?? 'normal'}
+          speed={scene.planeVideoSpeed ?? 1}
+          extrusionDepth={extrusionDepth}
+        />
+      )}
+      {media.type === 'image' && (
+        <PlaneImage url={media.url} extrusionDepth={extrusionDepth} />
+      )}
+      {media.type === 'svg' && (
+        <PlaneSVG
+          url={media.url}
+          extrusionDepth={extrusionDepth}
+          colorOverride={planeSvgColor}
+        />
+      )}
+    </group>
+  )
+}
+
 function CameraRig({
   sceneData,
   time,
   duration,
   disabled,
+  handheldOverride,
+  fovOverride,
+  /** When true, handheld shake uses real elapsed time so it animates in preview when paused. */
+  handheldLivePreview,
 }: {
   sceneData: SceneType
   time: number
   duration: number
   disabled?: boolean
+  /** When set, use these values instead of scene handheld effect (e.g. from global effect keyframes). */
+  handheldOverride?: { intensity: number; rotationShake: number; speed: number; enabled: boolean }
+  /** When set (from global camera effect), override camera FOV. */
+  fovOverride?: number
+  /** When true, handheld shake uses real elapsed time so it animates in preview when paused. */
+  handheldLivePreview?: boolean
 }) {
   const { camera } = useThree()
+  const handheldElapsedRef = useRef(0)
   const zoomEffect = sceneData.effects.find((e): e is SceneEffectZoom => e.type === 'zoom')
   const zoomStart = zoomEffect?.startScale ?? 1
   const zoomEnd = zoomEffect?.endScale ?? 1
   const t = duration > 0 ? Math.min(1, time / duration) : 0
   const zoom = zoomStart + (zoomEnd - zoomStart) * t
   const flyover = sceneData.flyover
-  const flyEnabled = flyover?.enabled && flyover.start && flyover.end
-  const easedT = applyFlyoverEasing(t, flyover?.easing)
+  const keyframes = getFlyoverKeyframes(sceneData)
 
   const handheldEffect = sceneData.effects.find(
     (e): e is SceneEffectHandheld => e.type === 'handheld'
   )
   const h = handheldEffect
-  const intensity =
-    (h?.intensityStart ?? (h as { intensity?: number })?.intensity ?? 0) +
+  const intensity = handheldOverride
+    ? handheldOverride.intensity
+    : (h?.intensityStart ?? (h as { intensity?: number })?.intensity ?? 0) +
     ((h?.intensityEnd ?? (h as { intensity?: number })?.intensity ?? 0) - (h?.intensityStart ?? (h as { intensity?: number })?.intensity ?? 0)) * t
-  const rotationShake =
-    (h?.rotationShakeStart ?? (h as { rotationShake?: number })?.rotationShake ?? 0) +
+  const rotationShake = handheldOverride
+    ? handheldOverride.rotationShake
+    : (h?.rotationShakeStart ?? (h as { rotationShake?: number })?.rotationShake ?? 0) +
     ((h?.rotationShakeEnd ?? (h as { rotationShake?: number })?.rotationShake ?? 0) - (h?.rotationShakeStart ?? (h as { rotationShake?: number })?.rotationShake ?? 0)) * t
-  const speed =
-    (h?.speedStart ?? (h as { speed?: number })?.speed ?? 1) +
+  const speed = handheldOverride
+    ? handheldOverride.speed
+    : (h?.speedStart ?? (h as { speed?: number })?.speed ?? 1) +
     ((h?.speedEnd ?? (h as { speed?: number })?.speed ?? 1) - (h?.speedStart ?? (h as { speed?: number })?.speed ?? 1)) * t
-  const handheldOn =
-    handheldEffect?.enabled &&
-    Number.isFinite(intensity) &&
-    Number.isFinite(rotationShake) &&
-    Number.isFinite(speed)
+  const handheldOn = handheldOverride
+    ? handheldOverride.enabled && Number.isFinite(intensity) && Number.isFinite(rotationShake) && Number.isFinite(speed)
+    : Boolean(
+      handheldEffect?.enabled &&
+      Number.isFinite(intensity) &&
+      Number.isFinite(rotationShake) &&
+      Number.isFinite(speed)
+    )
 
-  useFrame(() => {
+  useFrame((_state, delta) => {
     if (disabled) return
+    // When there are no flyover keyframes, leave the camera where it is (do not reset to default).
+    if (keyframes.length === 0) return
     let pos: [number, number, number]
     let rot: [number, number, number]
     let fov = FOV_DEG
 
-    if (flyEnabled && flyover?.start?.position && flyover?.end?.position) {
-      const s = flyover.start
-      const e = flyover.end
+    if (keyframes.length === 1) {
+      const k = keyframes[0]
+      pos = [...k.position]
+      rot = [...k.rotation]
+      fov = k.fov ?? FOV_DEG
+    } else {
+      // Find segment containing t (normalized 0..1)
+      let i = 0
+      for (; i < keyframes.length - 1 && keyframes[i + 1].time <= t; i++) { }
+      const k0 = keyframes[i]
+      const k1 = keyframes[Math.min(i + 1, keyframes.length - 1)]
+      const segDuration = k1.time - k0.time
+      const segmentU = segDuration > 1e-9 ? (t - k0.time) / segDuration : 1
+      const easedU = applyFlyoverEasing(Math.max(0, Math.min(1, segmentU)), flyover?.easing)
       pos = [
-        s.position[0] + (e.position[0] - s.position[0]) * easedT,
-        s.position[1] + (e.position[1] - s.position[1]) * easedT,
-        s.position[2] + (e.position[2] - s.position[2]) * easedT,
+        k0.position[0] + (k1.position[0] - k0.position[0]) * easedU,
+        k0.position[1] + (k1.position[1] - k0.position[1]) * easedU,
+        k0.position[2] + (k1.position[2] - k0.position[2]) * easedU,
       ]
       rot = [
-        s.rotation[0] + (e.rotation[0] - s.rotation[0]) * easedT,
-        s.rotation[1] + (e.rotation[1] - s.rotation[1]) * easedT,
-        s.rotation[2] + (e.rotation[2] - s.rotation[2]) * easedT,
+        k0.rotation[0] + (k1.rotation[0] - k0.rotation[0]) * easedU,
+        k0.rotation[1] + (k1.rotation[1] - k0.rotation[1]) * easedU,
+        k0.rotation[2] + (k1.rotation[2] - k0.rotation[2]) * easedU,
       ]
-      fov = (s.fov ?? FOV_DEG) + ((e.fov ?? FOV_DEG) - (s.fov ?? FOV_DEG)) * easedT
-    } else {
-      const s = flyover?.start ?? { position: [0, 0, 5], rotation: [0, 0, 0] }
-      pos = s.position
-      rot = s.rotation
+      fov = (k0.fov ?? FOV_DEG) + ((k1.fov ?? FOV_DEG) - (k0.fov ?? FOV_DEG)) * easedU
     }
     if (!pos.every(Number.isFinite) || !rot.every(Number.isFinite)) return
 
-    if (handheldOn && handheldEffect) {
-      const offsets = getHandheldOffsets(time, intensity, rotationShake, speed)
+    let handheldTime = time
+    if (handheldOn && handheldLivePreview) {
+      handheldElapsedRef.current += delta
+      handheldTime = handheldElapsedRef.current
+    } else if (!handheldOn) {
+      handheldElapsedRef.current = 0
+    }
+
+    if (handheldOn) {
+      const offsets = getHandheldOffsets(handheldTime, intensity, rotationShake, speed)
       pos = [
         pos[0] + offsets.position[0],
         pos[1] + offsets.position[1],
@@ -560,7 +828,8 @@ function CameraRig({
     camera.position.set(pos[0] * zoom, pos[1] * zoom, pos[2] * zoom)
     camera.rotation.set(rot[0], rot[1], rot[2])
     if ('fov' in camera) {
-      camera.fov = Number.isFinite(fov) ? fov : FOV_DEG
+      const finalFov = fovOverride != null && Number.isFinite(fovOverride) ? fovOverride : (Number.isFinite(fov) ? fov : FOV_DEG)
+      camera.fov = finalFov
       camera.updateProjectionMatrix()
     }
   })
@@ -582,14 +851,15 @@ function FlyoverEditSync() {
 
   useFrame(() => {
     if (!camera || !('fov' in camera)) return
-    const start = scene?.flyover?.start
-    if (jumpToStart && start?.position && start?.rotation) {
-      const [x, y, z] = start.position
-      const [rx, ry, rz] = start.rotation
+    const keyframes = getFlyoverKeyframes(scene)
+    const firstKf = keyframes[0]
+    if (jumpToStart && firstKf?.position && firstKf?.rotation) {
+      const [x, y, z] = firstKf.position
+      const [rx, ry, rz] = firstKf.rotation
       if (Number.isFinite(x + y + z + rx + ry + rz)) {
         camera.position.set(x, y, z)
         camera.rotation.set(rx, ry, rz)
-        camera.fov = start.fov != null && Number.isFinite(start.fov) ? start.fov : 50
+        camera.fov = firstKf.fov != null && Number.isFinite(firstKf.fov) ? firstKf.fov : 50
         camera.updateProjectionMatrix()
         const state = {
           position: [x, y, z] as [number, number, number],
@@ -602,14 +872,14 @@ function FlyoverEditSync() {
       }
       setJumpToStart(false)
     }
-    if (justEnabled.current && start?.position && start?.rotation) {
+    if (justEnabled.current && firstKf?.position && firstKf?.rotation) {
       try {
-        const [x, y, z] = start.position
-        const [rx, ry, rz] = start.rotation
+        const [x, y, z] = firstKf.position
+        const [rx, ry, rz] = firstKf.rotation
         if (Number.isFinite(x + y + z + rx + ry + rz)) {
           camera.position.set(x, y, z)
           camera.rotation.set(rx, ry, rz)
-          camera.fov = start.fov != null && Number.isFinite(start.fov) ? start.fov : 50
+          camera.fov = firstKf.fov != null && Number.isFinite(firstKf.fov) ? firstKf.fov : 50
           camera.updateProjectionMatrix()
         }
       } finally {
@@ -643,11 +913,75 @@ const ROTATE_SPEED = 1.8 // radians per second (IJKL)
 const _forward = new THREE.Vector3()
 const _right = new THREE.Vector3()
 
+/** OrbitControls always does lookAt(target) each frame, so it overwrites camera rotation/position.
+ * After WASDFly moves/rotates the camera, we sync the orbit target so the next update() doesn't undo it. */
+function OrbitKeyboardSync({ controlsRef }: { controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
+  const { camera } = useThree()
+  const prevPosition = useRef(new THREE.Vector3())
+  const prevQuaternion = useRef(new THREE.Quaternion())
+  const hasPrevious = useRef(false)
+  const _dir = useRef(new THREE.Vector3())
+  const _delta = useRef(new THREE.Vector3())
+
+  useFrame((_, __) => {
+    const controls = controlsRef?.current
+    if (!controls?.target || !camera || !('fov' in camera)) return
+    const k = getFlyKeys()
+    const anyKey = k.w || k.a || k.s || k.d || k.q || k.e || k.i || k.j || k.k || k.l
+    if (!anyKey) {
+      hasPrevious.current = false
+      return
+    }
+    const pos = camera.position
+    const quat = camera.quaternion
+    const target = controls.target
+
+    if (!hasPrevious.current) {
+      prevPosition.current.copy(pos)
+      prevQuaternion.current.copy(quat)
+      hasPrevious.current = true
+      // Sync target so next frame OrbitControls.update() doesn't overwrite rotation/position
+      const dist = pos.distanceTo(target)
+      camera.getWorldDirection(_dir.current)
+      target.copy(pos).add(_dir.current.multiplyScalar(dist))
+      return
+    }
+
+    const prevPos = prevPosition.current
+    const prevQuat = prevQuaternion.current
+    const posDelta = _delta.current
+    const dir = _dir.current
+
+    // Position changed (WASD/QE): move target by the same delta so view doesn't orbit
+    posDelta.subVectors(pos, prevPos)
+    if (posDelta.lengthSq() > 1e-12) {
+      target.add(posDelta)
+    }
+
+    // Rotation changed (IJKL): put target in front of camera at same distance so lookAt matches
+    const quatDelta = prevQuat.angleTo(quat)
+    if (quatDelta > 1e-6) {
+      const dist = pos.distanceTo(target)
+      camera.getWorldDirection(dir)
+      target.copy(pos).add(dir.multiplyScalar(dist))
+    }
+
+    prevPosition.current.copy(pos)
+    prevQuaternion.current.copy(quat)
+  }, 1)
+
+  return null
+}
+
 function WASDFly() {
   const { camera } = useThree()
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        setFlyKey(e.code, true)
+        return
+      }
       if (!isFlyKey(e.code)) return
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable) return
@@ -655,6 +989,10 @@ function WASDFly() {
       setFlyKey(e.code, true)
     }
     const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        setFlyKey(e.code, false)
+        return
+      }
       if (!isFlyKey(e.code)) return
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable) return
@@ -676,6 +1014,8 @@ function WASDFly() {
       setFlyKey('KeyJ', false)
       setFlyKey('KeyK', false)
       setFlyKey('KeyL', false)
+      setFlyKey('ShiftLeft', false)
+      setFlyKey('ShiftRight', false)
     }
   }, [])
 
@@ -686,30 +1026,30 @@ function WASDFly() {
     if (!anyMove && !anyRotate) return
     if (!camera || !('fov' in camera)) return
     const dt = Number.isFinite(delta) && delta > 0 && delta < 1 ? delta : 1 / 60
+    const slow = (k.shiftLeft || k.shiftRight) ? 0.22 : 1 // Shift = smooth precise slow control
 
-    // WASD + Q/E: move only (forward, left, back, right, down, up)
+    // WASD + Q/E: first-person style: forward/back and strafe left/right relative to camera look direction.
     if (anyMove) {
-      const move = FLY_SPEED * dt
+      const move = FLY_SPEED * dt * slow
       camera.getWorldDirection(_forward)
+      // Camera's local X in world space = strafe right (so A/D follow current rotation)
+      const m = camera.matrix.elements
+      _right.set(m[0], m[1], m[2])
       if (k.e) camera.position.y += move
       if (k.q) camera.position.y -= move
-      const lenSq = _forward.x * _forward.x + _forward.z * _forward.z
-      if (lenSq >= 1e-10) {
-        _right.set(_forward.z, 0, -_forward.x).normalize()
-        if (k.w) camera.position.addScaledVector(_forward, move)
-        if (k.s) camera.position.addScaledVector(_forward, -move)
-        if (k.d) camera.position.addScaledVector(_right, move)
-        if (k.a) camera.position.addScaledVector(_right, -move)
-      }
+      if (k.w) camera.position.addScaledVector(_forward, move)
+      if (k.s) camera.position.addScaledVector(_forward, -move)
+      if (k.d) camera.position.addScaledVector(_right, move)
+      if (k.a) camera.position.addScaledVector(_right, -move)
     }
 
-    // IJKL (vim): full camera rotation (pitch and yaw)
+    // IJKL: camera rotation — J look left, L look right, I look up, K look down
     if (anyRotate) {
-      const rot = ROTATE_SPEED * dt
-      if (k.j) camera.rotation.y += rot   // yaw left
-      if (k.l) camera.rotation.y -= rot   // yaw right
-      if (k.i) camera.rotation.x -= rot   // pitch up
-      if (k.k) camera.rotation.x += rot   // pitch down
+      const rot = ROTATE_SPEED * dt * slow
+      if (k.j) camera.rotation.y += rot   // look left
+      if (k.l) camera.rotation.y -= rot   // look right
+      if (k.i) camera.rotation.x += rot   // look down
+      if (k.k) camera.rotation.x -= rot   // look up
     }
   })
 
@@ -764,6 +1104,7 @@ function SceneContent() {
   const isExporting = useStore((s) => s.isExporting)
   const exportRenderMode = useStore((s) => s.exportRenderMode)
   const trimScrub = useStore((s) => s.trimScrub)
+  const orbitControlsRef = useRef<OrbitControlsImpl | null>(null)
   const scene = project.scenes[currentSceneIndex]
   if (!scene) return null
 
@@ -779,34 +1120,71 @@ function SceneContent() {
   const editControlsActive = flyoverEditMode && !isPlaying && !formFocused
 
   const { size } = useThree()
+  const lerp = (s: number, e: number) =>
+    s + (e - s) * (sceneDuration > 0 ? Math.min(1, sceneLocalTime / sceneDuration) : 0)
+
+  const globalGrain = getGlobalEffectStateAtTime(project, 'grain', currentTime)
+  const globalDof = getGlobalEffectStateAtTime(project, 'dof', currentTime)
+  const globalHandheld = getGlobalEffectStateAtTime(project, 'handheld', currentTime)
+  const globalChromatic = getGlobalEffectStateAtTime(project, 'chromaticAberration', currentTime)
+  const globalLens = getGlobalEffectStateAtTime(project, 'lensDistortion', currentTime)
+  const globalGlitch = getGlobalEffectStateAtTime(project, 'glitch', currentTime)
+  const globalVignette = getGlobalEffectStateAtTime(project, 'vignette', currentTime)
+  const globalScanline = getGlobalEffectStateAtTime(project, 'scanline', currentTime)
+  const globalDither = getGlobalEffectStateAtTime(project, 'dither', currentTime)
+  const globalCamera = getGlobalEffectStateAtTime(project, 'camera', currentTime)
+
   const grainEffect = scene.effects.find((e): e is SceneEffectGrain => e.type === 'grain')
   const grainStart = grainEffect?.startOpacity ?? (grainEffect as { opacity?: number })?.opacity ?? 0.1
   const grainEnd = grainEffect?.endOpacity ?? (grainEffect as { opacity?: number })?.opacity ?? 0.1
-  const grainOpacity = grainEffect
-    ? grainStart + (grainEnd - grainStart) * (sceneDuration > 0 ? Math.min(1, sceneLocalTime / sceneDuration) : 0)
-    : 0
-  const dofEffect = scene.effects.find((e): e is SceneEffectDoF => e.type === 'dof')
-  const dofEnabled = dofEffect?.enabled ?? true
-  const d = dofEffect
-  const lerp = (s: number, e: number) => s + (e - s) * (sceneDuration > 0 ? Math.min(1, sceneLocalTime / sceneDuration) : 0)
-  const dofFocusDistance = lerp(
-    d?.focusDistanceStart ?? (d as { focusDistance?: number })?.focusDistance ?? 0.015,
-    d?.focusDistanceEnd ?? (d as { focusDistance?: number })?.focusDistance ?? 0.015
-  )
-  const dofFocalLength = lerp(
-    d?.focalLengthStart ?? (d as { focalLength?: number })?.focalLength ?? 0.02,
-    d?.focalLengthEnd ?? (d as { focalLength?: number })?.focalLength ?? 0.02
-  )
-  const dofFocusRange = lerp(
-    d?.focusRangeStart ?? (d as { focusRange?: number })?.focusRange ?? 0.5,
-    d?.focusRangeEnd ?? (d as { focusRange?: number })?.focusRange ?? 0.5
-  )
-  const dofBokehScale = lerp(
-    d?.bokehScaleStart ?? (d as { bokehScale?: number })?.bokehScale ?? 6,
-    d?.bokehScaleEnd ?? (d as { bokehScale?: number })?.bokehScale ?? 6
-  )
+  const grainEnabled = globalGrain != null ? (globalGrain.enabled !== false) : true
+  const grainOpacity =
+    globalGrain != null
+      ? grainEnabled
+        ? (globalGrain.startOpacity as number)
+        : 0
+      : grainEffect
+        ? grainStart + (grainEnd - grainStart) * (sceneDuration > 0 ? Math.min(1, sceneLocalTime / sceneDuration) : 0)
+        : 0
 
-  const ditherEffect = project.dither ?? scene.effects.find((e): e is SceneEffectDither => e.type === 'dither')
+  const dofEffect = scene.effects.find((e): e is SceneEffectDoF => e.type === 'dof')
+  const d = dofEffect
+  const dofEnabled = globalDof != null ? (globalDof.enabled as boolean) : (dofEffect?.enabled ?? true)
+  const dofFocusDistance =
+    globalDof != null
+      ? (globalDof.focusDistanceStart as number)
+      : lerp(
+        d?.focusDistanceStart ?? (d as { focusDistance?: number })?.focusDistance ?? 0.015,
+        d?.focusDistanceEnd ?? (d as { focusDistance?: number })?.focusDistance ?? 0.015
+      )
+  const dofFocalLength =
+    globalDof != null
+      ? (globalDof.focalLengthStart as number)
+      : lerp(
+        d?.focalLengthStart ?? (d as { focalLength?: number })?.focalLength ?? 0.02,
+        d?.focalLengthEnd ?? (d as { focalLength?: number })?.focalLength ?? 0.02
+      )
+  const dofFocusRange =
+    globalDof != null
+      ? (globalDof.focusRangeStart as number)
+      : lerp(
+        d?.focusRangeStart ?? (d as { focusRange?: number })?.focusRange ?? 0.5,
+        d?.focusRangeEnd ?? (d as { focusRange?: number })?.focusRange ?? 0.5
+      )
+  const dofBokehScale =
+    globalDof != null
+      ? (globalDof.bokehScaleStart as number)
+      : lerp(
+        d?.bokehScaleStart ?? (d as { bokehScale?: number })?.bokehScale ?? 6,
+        d?.bokehScaleEnd ?? (d as { bokehScale?: number })?.bokehScale ?? 6
+      )
+
+  const ditherEffect =
+    (globalDither != null && typeof (globalDither as unknown as SceneEffectDither).preset === 'string'
+      ? (globalDither as unknown as SceneEffectDither)
+      : null) ??
+    project.dither ??
+    scene.effects.find((e): e is SceneEffectDither => e.type === 'dither')
   const ditherEnabled = ditherEffect?.enabled ?? false
   const ditherPreset = ditherEffect?.preset ?? 'medium'
   const ditherMode = ditherEffect?.mode ?? 'bayer4'
@@ -826,11 +1204,14 @@ function SceneContent() {
   const chromaticEffect = scene.effects.find(
     (e): e is SceneEffectChromaticAberration => e.type === 'chromaticAberration'
   )
-  const chromaticEnabled = chromaticEffect?.enabled ?? false
+  const chromaticEnabled =
+    globalChromatic != null ? (globalChromatic.enabled as boolean) : (chromaticEffect?.enabled ?? false)
   const chromaticOffsetVal =
-    chromaticEffect == null
-      ? 0.005
-      : lerp(
+    globalChromatic != null
+      ? (globalChromatic.offsetStart as number)
+      : chromaticEffect == null
+        ? 0.005
+        : lerp(
           chromaticEffect.offsetStart ?? (chromaticEffect as { offset?: number }).offset ?? 0.005,
           chromaticEffect.offsetEnd ?? (chromaticEffect as { offset?: number }).offset ?? 0.005
         )
@@ -842,11 +1223,13 @@ function SceneContent() {
   const lensEffect = scene.effects.find(
     (e): e is SceneEffectLensDistortion => e.type === 'lensDistortion'
   )
-  const lensEnabled = lensEffect?.enabled ?? false
+  const lensEnabled = globalLens != null ? (globalLens.enabled as boolean) : (lensEffect?.enabled ?? false)
   const lensDistortionVal =
-    lensEffect == null
-      ? 0
-      : lerp(
+    globalLens != null
+      ? (globalLens.distortionStart as number)
+      : lensEffect == null
+        ? 0
+        : lerp(
           lensEffect.distortionStart ?? (lensEffect as { distortion?: number }).distortion ?? 0,
           lensEffect.distortionEnd ?? (lensEffect as { distortion?: number }).distortion ?? 0
         )
@@ -858,34 +1241,46 @@ function SceneContent() {
   const lensFocalLength = useMemo(() => new THREE.Vector2(1, 1), [])
 
   const glitchEffect = scene.effects.find((e): e is SceneEffectGlitch => e.type === 'glitch')
-  const glitchEnabled = glitchEffect?.enabled ?? false
+  const glitchEnabled = globalGlitch != null ? (globalGlitch.enabled as boolean) : (glitchEffect?.enabled ?? false)
   const glitchMode =
-    glitchEffect?.mode === 'constantMild' ? GlitchMode.CONSTANT_MILD : GlitchMode.SPORADIC
+    (globalGlitch != null ? globalGlitch.mode : glitchEffect?.mode) === 'constantMild'
+      ? GlitchMode.CONSTANT_MILD
+      : GlitchMode.SPORADIC
   const glitchDelay = useMemo(
-    () => new THREE.Vector2(glitchEffect?.delayMin ?? 1.5, glitchEffect?.delayMax ?? 3.5),
-    [glitchEffect?.delayMin, glitchEffect?.delayMax]
+    () =>
+      new THREE.Vector2(
+        Number(globalGlitch?.delayMin ?? glitchEffect?.delayMin ?? 1.5),
+        Number(globalGlitch?.delayMax ?? glitchEffect?.delayMax ?? 3.5)
+      ),
+    [globalGlitch?.delayMin, globalGlitch?.delayMax, glitchEffect?.delayMin, glitchEffect?.delayMax]
   )
   const glitchDuration = useMemo(
-    () => new THREE.Vector2(glitchEffect?.durationMin ?? 0.6, glitchEffect?.durationMax ?? 1),
-    [glitchEffect?.durationMin, glitchEffect?.durationMax]
+    () =>
+      new THREE.Vector2(
+        Number(globalGlitch?.durationMin ?? glitchEffect?.durationMin ?? 0.6),
+        Number(globalGlitch?.durationMax ?? glitchEffect?.durationMax ?? 1)
+      ),
+    [globalGlitch?.durationMin, globalGlitch?.durationMax, glitchEffect?.durationMin, glitchEffect?.durationMax]
   )
   const glitchChromaticOffset = useMemo(
     () =>
-      glitchEffect?.monochrome
+      (globalGlitch?.monochrome ?? glitchEffect?.monochrome)
         ? new THREE.Vector2(0, 0)
         : new THREE.Vector2(0.02, 0.02),
-    [glitchEffect?.monochrome]
+    [globalGlitch?.monochrome, glitchEffect?.monochrome]
   )
 
   const vignetteEffect = scene.effects.find(
     (e): e is SceneEffectVignette => e.type === 'vignette'
   )
-  const vignetteEnabled = vignetteEffect?.enabled ?? false
+  const vignetteEnabled =
+    globalVignette != null ? (globalVignette.enabled as boolean) : (vignetteEffect?.enabled ?? false)
 
   const scanlineEffect = scene.effects.find(
     (e): e is SceneEffectScanline => e.type === 'scanline'
   )
-  const scanlineEnabled = scanlineEffect?.enabled ?? false
+  const scanlineEnabled =
+    globalScanline != null ? (globalScanline.enabled as boolean) : (scanlineEffect?.enabled ?? false)
 
   return (
     <>
@@ -894,8 +1289,21 @@ function SceneContent() {
         time={sceneLocalTime}
         duration={sceneDuration}
         disabled={editControlsActive}
+        handheldLivePreview={!isPlaying && !isExporting}
+        fovOverride={globalCamera != null && (globalCamera.enabled !== false) ? (globalCamera.fov as number) : undefined}
+        handheldOverride={
+          globalHandheld != null
+            ? {
+              intensity: globalHandheld.intensityStart as number,
+              rotationShake: globalHandheld.rotationShakeStart as number,
+              speed: globalHandheld.speedStart as number,
+              enabled: globalHandheld.enabled as boolean,
+            }
+            : undefined
+        }
       />
       <OrbitControls
+        ref={orbitControlsRef}
         enabled={editControlsActive}
         enablePan={editControlsActive}
         enableZoom={editControlsActive}
@@ -908,19 +1316,28 @@ function SceneContent() {
         <>
           <FlyoverEditSync />
           <WASDFly />
+          <OrbitKeyboardSync controlsRef={orbitControlsRef} />
         </>
       )}
       {!hideBackground &&
         (project.backgroundVideoUrl ? (
           <BackgroundVideo
             url={project.backgroundVideoUrl}
-            trim={scene.backgroundTrim}
+            trim={project.backgroundVideoContinuous ? null : scene.backgroundTrim}
             sceneLocalTime={sceneLocalTime}
             sceneDuration={sceneDuration}
             viewAspect={project.aspectRatio[0] / project.aspectRatio[1]}
             scrubTime={trimScrub?.video === 'background' ? trimScrub.time : null}
             playbackMode={scene.backgroundVideoPlaybackMode ?? 'normal'}
             speed={scene.backgroundVideoSpeed ?? 1}
+            continuous={project.backgroundVideoContinuous ?? false}
+            globalTime={currentTime}
+          />
+        ) : project.backgroundTexture ? (
+          <BackgroundTextureMesh
+            config={project.backgroundTexture}
+            viewAspect={project.aspectRatio[0] / project.aspectRatio[1]}
+            globalTime={currentTime}
           />
         ) : (
           <mesh
@@ -932,6 +1349,20 @@ function SceneContent() {
           </mesh>
         ))}
       {(() => {
+        const panes = getPanesForRender(project)
+        if (panes.length > 0) {
+          const scrubTime = trimScrub?.video === 'plane' ? trimScrub.time : null
+          return panes.map((pane) => (
+            <SinglePane
+              key={pane.id}
+              pane={pane}
+              scene={scene}
+              sceneLocalTime={sceneLocalTime}
+              sceneDuration={sceneDuration}
+              scrubTime={scrubTime}
+            />
+          ))
+        }
         const planeMedia = getPlaneMedia(project)
         const extrusion = project.planeExtrusionDepth ?? 0
         if (!planeMedia) return null
@@ -1009,13 +1440,29 @@ function SceneContent() {
           opacity={ditherEnabled ? 1 : 0}
         />
         <Vignette
-          offset={vignetteEffect?.offset ?? 0.5}
-          darkness={vignetteEffect?.darkness ?? 0.5}
+          offset={
+            globalVignette != null
+              ? (globalVignette.offset as number)
+              : (vignetteEffect?.offset ?? 0.5)
+          }
+          darkness={
+            globalVignette != null
+              ? (globalVignette.darkness as number)
+              : (vignetteEffect?.darkness ?? 0.5)
+          }
           opacity={vignetteEnabled ? 1 : 0}
         />
         <Scanline
-          density={scanlineEffect?.density ?? 1.5}
-          scrollSpeed={scanlineEffect?.scrollSpeed ?? 0}
+          density={
+            globalScanline != null
+              ? (globalScanline.density as number)
+              : (scanlineEffect?.density ?? 1.5)
+          }
+          scrollSpeed={
+            globalScanline != null
+              ? (globalScanline.scrollSpeed as number)
+              : (scanlineEffect?.scrollSpeed ?? 0)
+          }
           opacity={scanlineEnabled ? 1 : 0}
         />
       </EffectComposer>
@@ -1041,9 +1488,9 @@ export function EditorCanvas() {
       <Canvas
         key={useAlpha ? 'plane-only' : 'full'}
         gl={{ preserveDrawingBuffer: true, alpha: useAlpha }}
-        camera={{ position: [0, 0, 5], fov: FOV_DEG }}
+        camera={{ position: [0, 0, 3.5], fov: FOV_DEG }}
         onCreated={({ camera }) => {
-          camera.position.set(0, 0, 5)
+          camera.position.set(0, 0, 3.5)
         }}
       >
         <Suspense fallback={null}>

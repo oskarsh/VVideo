@@ -1,4 +1,6 @@
 import { useStore } from '@/store'
+import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
+import { parseNum, clamp } from '@/utils/numbers'
 import type { SceneText, SceneTextMode } from '@/types'
 import { createDefaultSceneText } from '@/types'
 
@@ -92,13 +94,13 @@ export function TextPanel() {
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+        <h2 className={sectionHeadingClass}>
           Text
         </h2>
         <button
           type="button"
           onClick={addText}
-          className="text-xs font-medium text-emerald-400 hover:text-emerald-300"
+          className="text-xs font-medium text-white/70 hover:text-white"
         >
           + Add text
         </button>
@@ -144,7 +146,7 @@ function TextItem({
           value={t.content}
           onChange={(e) => onChange({ content: e.target.value })}
           placeholder="Enter text"
-          className="flex-1 min-w-0 rounded px-2 py-1.5 bg-white/10 border border-white/20 text-white text-sm placeholder-white/40"
+          className="flex-1 min-w-0 rounded px-2 py-1.5 bg-black/30 border border-white/10 text-white text-sm placeholder-white/40 focus:border-white/30 outline-none"
         />
         <button
           type="button"
@@ -179,11 +181,11 @@ function TextItem({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-[10px] text-white/50 uppercase tracking-wider mb-0.5">Font</label>
+          <label className={smallLabelClass}>Font</label>
           <select
             value={t.fontFamily}
             onChange={(e) => onChange({ fontFamily: e.target.value })}
-            className="w-full rounded px-2 py-1.5 bg-white/10 border border-white/20 text-white text-xs"
+            className="w-full rounded px-2 py-1.5 bg-black/30 border border-white/10 text-white text-xs focus:border-white/30 outline-none"
           >
             {FONT_OPTIONS.map((f) => (
               <option key={f} value={f} className="bg-zinc-900 text-white">
@@ -193,7 +195,7 @@ function TextItem({
           </select>
         </div>
         <div>
-          <label className="block text-[10px] text-white/50 uppercase tracking-wider mb-0.5">Color</label>
+          <label className={smallLabelClass}>Color</label>
           <div className="flex items-center gap-1.5">
             <input
               type="color"
@@ -205,7 +207,7 @@ function TextItem({
               type="text"
               value={t.color}
               onChange={(e) => onChange({ color: e.target.value })}
-              className="flex-1 min-w-0 rounded px-2 py-1.5 bg-white/10 border border-white/20 text-white text-xs font-mono"
+              className="flex-1 min-w-0 rounded px-2 py-1.5 bg-black/30 border border-white/10 text-white text-xs font-mono focus:border-white/30 outline-none"
             />
           </div>
         </div>
@@ -223,21 +225,21 @@ function TextItem({
           />
         ) : (
           <>
-            <label className="block text-[10px] text-white/50 uppercase tracking-wider mb-0.5">Font size (px)</label>
+            <label className={smallLabelClass}>Font size (px)</label>
             <input
               type="number"
               min={8}
               max={200}
               value={t.fontSize}
-              onChange={(e) => onChange({ fontSize: Number(e.target.value) || 24 })}
-              className="w-full rounded px-2 py-1.5 bg-white/10 border border-white/20 text-white text-xs"
+              onChange={(e) => onChange({ fontSize: clamp(parseNum(e.target.value, 24), 8, 200) })}
+              className="w-full rounded px-2 py-1.5 bg-black/30 border border-white/10 text-white text-xs focus:border-white/30 outline-none"
             />
           </>
         )}
       </div>
       {is3d ? (
         <>
-          <div className="text-[10px] text-white/50 uppercase tracking-wider mb-1.5 pt-0.5">Position</div>
+          <div className={smallLabelClass + ' pt-0.5'}>Position</div>
           <div className="space-y-2">
             <SliderRow
               label="X"
@@ -279,7 +281,7 @@ function TextItem({
               }}
             />
           </div>
-          <div className="text-[10px] text-white/50 uppercase tracking-wider mb-1.5 pt-1">Rotation</div>
+          <div className={smallLabelClass + ' pt-1'}>Rotation</div>
           <div className="space-y-2">
             <SliderRow
               label="X (pitch)"
@@ -337,11 +339,11 @@ function TextItem({
         <>
           <div className="flex gap-2 flex-wrap">
             <div>
-              <label className="block text-[10px] text-white/50 uppercase tracking-wider mb-0.5">Align X</label>
+              <label className={smallLabelClass}>Align X</label>
               <select
                 value={t.staticAlignX}
                 onChange={(e) => onChange({ staticAlignX: e.target.value as 'left' | 'center' | 'right' })}
-                className="rounded px-2 py-1.5 bg-white/10 border border-white/20 text-white text-xs"
+                className="rounded px-2 py-1.5 bg-black/30 border border-white/10 text-white text-xs focus:border-white/30 outline-none"
               >
                 <option value="left" className="bg-zinc-900">Left</option>
                 <option value="center" className="bg-zinc-900">Center</option>
@@ -349,11 +351,11 @@ function TextItem({
               </select>
             </div>
             <div>
-              <label className="block text-[10px] text-white/50 uppercase tracking-wider mb-0.5">Align Y</label>
+              <label className={smallLabelClass}>Align Y</label>
               <select
                 value={t.staticAlignY}
                 onChange={(e) => onChange({ staticAlignY: e.target.value as 'top' | 'center' | 'bottom' })}
-                className="rounded px-2 py-1.5 bg-white/10 border border-white/20 text-white text-xs"
+                className="rounded px-2 py-1.5 bg-black/30 border border-white/10 text-white text-xs focus:border-white/30 outline-none"
               >
                 <option value="top" className="bg-zinc-900">Top</option>
                 <option value="center" className="bg-zinc-900">Center</option>
@@ -361,14 +363,14 @@ function TextItem({
               </select>
             </div>
             <div>
-              <label className="block text-[10px] text-white/50 uppercase tracking-wider mb-0.5">Padding (px)</label>
+              <label className={smallLabelClass}>Padding (px)</label>
               <input
                 type="number"
                 min={0}
                 max={200}
                 value={t.staticPadding}
-                onChange={(e) => onChange({ staticPadding: Number(e.target.value) || 24 })}
-                className="w-20 rounded px-2 py-1.5 bg-white/10 border border-white/20 text-white text-xs"
+                onChange={(e) => onChange({ staticPadding: clamp(parseNum(e.target.value, 24), 0, 200) })}
+                className="w-20 rounded px-2 py-1.5 bg-black/30 border border-white/10 text-white text-xs focus:border-white/30 outline-none"
               />
             </div>
           </div>

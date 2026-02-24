@@ -5,6 +5,11 @@ export interface FlyoverKeyframe {
   fov?: number
 }
 
+/** Keyframe at normalized time 0..1 within the scene. */
+export interface FlyoverKeyframeWithTime extends FlyoverKeyframe {
+  time: number
+}
+
 /** Easing for camera flyover: preset name or custom cubic Bezier (CSS-style control points). */
 export type FlyoverEasing =
   | { type: 'preset'; name: EasingPresetName }
@@ -39,12 +44,14 @@ export type EasingPresetName =
 
 export interface SceneEffectZoom {
   type: 'zoom'
+  enabled?: boolean
   startScale: number
   endScale: number
 }
 
 export interface SceneEffectGrain {
   type: 'grain'
+  enabled?: boolean
   startOpacity: number
   endOpacity: number
 }
@@ -167,6 +174,111 @@ export type SceneEffect =
   | SceneEffectVignette
   | SceneEffectScanline
 
+/** Effect types that can be driven by global keyframes (timeline). */
+export type GlobalEffectType =
+  | 'camera'
+  | 'grain'
+  | 'dither'
+  | 'dof'
+  | 'handheld'
+  | 'chromaticAberration'
+  | 'lensDistortion'
+  | 'glitch'
+  | 'vignette'
+  | 'scanline'
+
+/** One keyframe for a global effect: time in seconds (project timeline) + interpolatable params. */
+export interface GlobalEffectKeyframeGrain {
+  time: number
+  opacity: number
+}
+export interface GlobalEffectKeyframeDither {
+  time: number
+  enabled?: boolean
+  preset: 'subtle' | 'medium' | 'strong' | 'custom'
+  mode: 'bayer2' | 'bayer4' | 'bayer8' | 'random'
+  levels: number
+  intensity: number
+  luminanceOnly: boolean
+  thresholdBias: number
+}
+export interface GlobalEffectKeyframeDoF {
+  time: number
+  enabled?: boolean
+  focusDistance: number
+  focalLength: number
+  focusRange: number
+  bokehScale: number
+}
+export interface GlobalEffectKeyframeHandheld {
+  time: number
+  enabled?: boolean
+  intensity: number
+  rotationShake: number
+  speed: number
+}
+export interface GlobalEffectKeyframeChromatic {
+  time: number
+  enabled?: boolean
+  offset: number
+}
+export interface GlobalEffectKeyframeLens {
+  time: number
+  enabled?: boolean
+  distortion: number
+}
+export interface GlobalEffectKeyframeGlitch {
+  time: number
+  enabled?: boolean
+  mode?: 'sporadic' | 'constantMild'
+  ratio: number
+  columns: number
+  delayMin: number
+  delayMax: number
+  durationMin: number
+  durationMax: number
+  monochrome: boolean
+}
+export interface GlobalEffectKeyframeVignette {
+  time: number
+  enabled?: boolean
+  offset: number
+  darkness: number
+}
+export interface GlobalEffectKeyframeScanline {
+  time: number
+  enabled?: boolean
+  density: number
+  scrollSpeed: number
+}
+
+/** Global camera: FOV (field of view) in degrees. Affects the perspective camera globally. */
+export interface GlobalEffectKeyframeCamera {
+  time: number
+  /** Vertical field of view in degrees (e.g. 10–120). */
+  fov: number
+}
+
+export type GlobalEffectKeyframe =
+  | GlobalEffectKeyframeCamera
+  | GlobalEffectKeyframeGrain
+  | GlobalEffectKeyframeDither
+  | GlobalEffectKeyframeDoF
+  | GlobalEffectKeyframeHandheld
+  | GlobalEffectKeyframeChromatic
+  | GlobalEffectKeyframeLens
+  | GlobalEffectKeyframeGlitch
+  | GlobalEffectKeyframeVignette
+  | GlobalEffectKeyframeScanline
+
+export interface GlobalEffectTrack {
+  enabled: boolean
+  keyframes: GlobalEffectKeyframe[]
+}
+
+/** Global post-processing effects with keyframes on project timeline (not per-scene). */
+export type GlobalEffectsMap = Partial<Record<GlobalEffectType, GlobalEffectTrack>>
+
 /** How video time is driven: normal = real-time with optional speed; fitScene = stretch/compress to fill scene duration. */
 export type VideoPlaybackMode = 'normal' | 'fitScene'
 
@@ -210,6 +322,8 @@ export interface Scene {
   backgroundTrimEndClaimed?: boolean
   /** True when user has explicitly set plane trim end (end then stays when start changes). */
   planeTrimEndClaimed?: boolean
+  /** Per-pane trim (for video panes). Key = pane id. When absent, pane uses full media or scene.planeTrim for legacy single plane. */
+  paneTrims?: Record<string, { start: number; end: number } | null>
   /** Background video: normal = 1x (or speed), fitScene = fit trim to scene length. Default normal. */
   backgroundVideoPlaybackMode?: VideoPlaybackMode
   /** Plane video: normal = 1x (or speed), fitScene = fit trim to scene length. Default normal. */
@@ -220,11 +334,15 @@ export interface Scene {
   planeVideoSpeed?: number
   flyover: {
     enabled: boolean
-    start: FlyoverKeyframe
-    end: FlyoverKeyframe
+    /** Keyframes at normalized time 0..1. Empty = no camera animation. */
+    keyframes: FlyoverKeyframeWithTime[]
     preset?: string // e.g. 'orbit-in', 'dolly'
-    /** Easing curve for camera motion. Defaults to linear if omitted. */
+    /** Easing curve for camera motion between keyframes. Defaults to linear if omitted. */
     easing?: FlyoverEasing
+    /** @deprecated Legacy: migrated to keyframes. */
+    start?: FlyoverKeyframe
+    /** @deprecated Legacy: migrated to keyframes. */
+    end?: FlyoverKeyframe
   } | null
   effects: SceneEffect[]
   /** Text overlays: 3D in scene or static in front of camera. */
@@ -237,12 +355,74 @@ export type PlaneMedia =
   | { type: 'image'; url: string }
   | { type: 'svg'; url: string }
 
+/** Per-pane animation: lerp from start to end over scene duration. */
+export interface PaneAnimation {
+  positionStart: [number, number, number]
+  positionEnd: [number, number, number]
+  scaleStart: number
+  scaleEnd: number
+  rotationStart: [number, number, number]
+  rotationEnd: [number, number, number]
+}
+
+/** A single pane (video, image, or SVG) in 3D space. Multiple panes can be layered by zIndex. */
+export interface Pane {
+  id: string
+  media: PlaneMedia
+  /** Render order: higher = in front. Also used as base Z position when position[2] is not overridden. */
+  zIndex: number
+  /** World position [x, y, z]. */
+  position: [number, number, number]
+  /** Uniform scale in world. */
+  scale: number
+  /** Rotation [x, y, z] in radians (euler). */
+  rotation: [number, number, number]
+  extrusionDepth: number
+  planeSvgColor?: string | null
+  /** When set, position/scale/rotation are lerped from start to end over the scene duration. */
+  animation?: PaneAnimation | null
+}
+
+/** Generated background texture (gradient, terrain, noise, or dots). Mutually exclusive with backgroundVideoUrl. */
+export type BackgroundTexture =
+  | { type: 'gradient'; colors: [string, string]; angle?: number; speed?: number }
+  | {
+    type: 'terrain'
+    colors: string[]
+    seed?: number
+    scale?: number
+    speed?: number
+  }
+  | {
+    type: 'noise'
+    /** Two colors to blend with noise. */
+    colors: [string, string]
+    /** Noise scale (detail). */
+    scale?: number
+    seed?: number
+    speed?: number
+  }
+  | {
+    type: 'dots'
+    backgroundColor: string
+    dotColor: string
+    /** Spacing between dot centers (0–1). */
+    spacing?: number
+    /** Dot radius (0–1). */
+    size?: number
+    speed?: number
+  }
+
 export interface Project {
   id: string
   name: string
   aspectRatio: [number, number] // e.g. [16, 9] or [9, 16]
   /** One shared background video for all scenes; each scene defines its own trim (cut). */
   backgroundVideoUrl: string | null
+  /** Generated background texture (gradient/terrain). When set, used instead of backgroundVideoUrl. */
+  backgroundTexture?: BackgroundTexture | null
+  /** When true, background video plays continuously from global timeline (no reset per scene); pane still changes per scene. */
+  backgroundVideoContinuous?: boolean
   /** One shared plane video for all scenes; each scene defines its own trim (cut). @deprecated Use planeMedia instead. */
   planeVideoUrl?: string | null
   /** Panel media: video, image, or SVG. When set, takes precedence over planeVideoUrl. */
@@ -251,8 +431,12 @@ export interface Project {
   planeExtrusionDepth?: number
   /** When panel is SVG: override fill color (hex e.g. #ffffff). Null = use SVG’s own colors. */
   planeSvgColor?: string | null
+  /** Multiple panes (video/image/SVG) with z-order and optional animation. When non-empty, used instead of single planeMedia. */
+  panes?: Pane[]
   /** Global dither applied to all scenes. */
   dither: SceneEffectDither
+  /** Global effect tracks with keyframes on project timeline (grain, dof, handheld, etc.). When set, override per-scene effects. */
+  globalEffects?: GlobalEffectsMap
   scenes: Scene[]
 }
 
@@ -261,6 +445,44 @@ export function getPlaneMedia(project: Project): PlaneMedia | null {
   if (project.planeMedia != null) return project.planeMedia
   const url = project.planeVideoUrl
   return url ? { type: 'video', url } : null
+}
+
+/** Default values for a new pane. */
+export function createDefaultPane(id: string): Pane {
+  return {
+    id,
+    media: { type: 'image', url: '' },
+    zIndex: 0,
+    position: [0, 0, 0],
+    scale: 1,
+    rotation: [0, 0, 0],
+    extrusionDepth: 0,
+    planeSvgColor: null,
+    animation: null,
+  }
+}
+
+/** Panes to render: either project.panes (sorted by zIndex) or a single virtual pane from legacy planeMedia. */
+export function getPanesForRender(project: Project): Pane[] {
+  const panes = project.panes ?? []
+  if (panes.length > 0) {
+    return [...panes].sort((a, b) => a.zIndex - b.zIndex)
+  }
+  const media = getPlaneMedia(project)
+  if (!media) return []
+  return [
+    {
+      id: 'legacy',
+      media,
+      zIndex: 0,
+      position: [0, 0, 0],
+      scale: 1,
+      rotation: [0, 0, 0],
+      extrusionDepth: project.planeExtrusionDepth ?? 0,
+      planeSvgColor: project.planeSvgColor ?? null,
+      animation: null,
+    },
+  ]
 }
 
 export const DEFAULT_ASPECT: [number, number] = [16, 9]
@@ -292,11 +514,10 @@ export function createDefaultScene(id: string): Scene {
     planeTrim: null,
     flyover: {
       enabled: true,
-      start: { position: [0, 0, 5], rotation: [0, 0, 0], fov: 50 },
-      end: { position: [0, 0, 5], rotation: [0, 0, 0], fov: 50 },
+      keyframes: [],
     },
     effects: [
-      { type: 'grain', startOpacity: 0.15, endOpacity: 0.15 },
+      { type: 'grain', startOpacity: 0.06, endOpacity: 0.06 },
       { type: 'zoom', startScale: 1, endScale: 1.05 },
       {
         type: 'dof',
@@ -305,10 +526,10 @@ export function createDefaultScene(id: string): Scene {
         focusDistanceEnd: 0.015,
         focalLengthStart: 0.02,
         focalLengthEnd: 0.02,
-        focusRangeStart: 0.5,
-        focusRangeEnd: 0.5,
-        bokehScaleStart: 6,
-        bokehScaleEnd: 6,
+        focusRangeStart: 0.22,
+        focusRangeEnd: 0.22,
+        bokehScaleStart: 2.8,
+        bokehScaleEnd: 2.8,
       },
       {
         type: 'handheld',
@@ -379,6 +600,7 @@ export function createDefaultProject(): Project {
     name: 'Untitled',
     aspectRatio: DEFAULT_ASPECT,
     backgroundVideoUrl: null,
+    backgroundTexture: null,
     planeVideoUrl: null,
     planeMedia: null,
     planeExtrusionDepth: 0,

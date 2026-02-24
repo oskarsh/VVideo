@@ -208,11 +208,10 @@ export function CurveEditor({ value, onChange }: CurveEditorProps) {
               key={p.id}
               type="button"
               onClick={() => onChange(p.easing)}
-              className={`px-2 py-1 rounded text-xs transition-colors ${
-                isActive
-                  ? 'bg-emerald-600/80 text-white'
+              className={`px-2 py-1 rounded text-xs transition-colors ${isActive
+                  ? 'bg-white text-black'
                   : 'bg-white/10 hover:bg-white/20 text-white/90'
-              }`}
+                }`}
             >
               {p.label}
             </button>
@@ -227,11 +226,10 @@ export function CurveEditor({ value, onChange }: CurveEditorProps) {
                 : { type: 'cubic', ...DEFAULT_CUBIC }
             )
           }
-          className={`px-2 py-1 rounded text-xs transition-colors ${
-            value?.type === 'cubic'
-              ? 'bg-blue-600/80 text-white'
+          className={`px-2 py-1 rounded text-xs transition-colors ${value?.type === 'cubic'
+              ? 'bg-white text-black'
               : 'bg-white/10 hover:bg-white/20 text-white/90'
-          }`}
+            }`}
         >
           Custom (drag curve)
         </button>

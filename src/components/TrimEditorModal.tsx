@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useStore } from '@/store'
+import { Modal } from '@/components/Modal'
 
 export interface TrimRange {
   start: number
@@ -101,6 +102,7 @@ function WaveformCanvas({
 }
 
 export function TrimEditorModal({
+  open = true,
   title,
   videoUrl,
   initialTrim,
@@ -109,6 +111,7 @@ export function TrimEditorModal({
   onApply,
   onClose,
 }: {
+  open?: boolean
   title: string
   videoUrl: string
   initialTrim: TrimRange | null
@@ -300,107 +303,105 @@ export function TrimEditorModal({
   const endPercent = duration > 0 ? (trim.end / duration) * 100 : 100
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <Modal
+      open={open}
+      onClose={onClose}
+      zIndex="z-50"
+      className="bg-black/80 p-4"
+      contentClassName="bg-zinc-900 rounded-xl border border-white/10 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
     >
-      <div
-        className="bg-zinc-900 rounded-xl border border-white/10 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">{title}</h3>
-          <button type="button" onClick={onClose} className="text-white/50 hover:text-white p-1" aria-label="Close">
-            ✕
+      <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <button type="button" onClick={onClose} className="text-white/50 hover:text-white p-1" aria-label="Close">
+          ✕
+        </button>
+      </div>
+
+      <div className="p-4 flex-1 min-h-0 flex flex-col gap-4">
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+          <video ref={videoRef} className="w-full h-full object-contain" muted playsInline loop={false} onTimeUpdate={() => { }} />
+          <div className="absolute bottom-2 left-2 right-2 flex justify-between text-xs text-white/80">
+            <span>{formatTime(previewTime)}</span>
+            <span>Trim: {formatTime(trim.start)} – {formatTime(trim.end)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const v = videoRef.current
+              if (!v) return
+              if (playing) v.pause()
+              else {
+                if (v.currentTime < trim.start || v.currentTime >= trim.end) v.currentTime = trim.start
+                v.play()
+              }
+            }}
+            className="absolute bottom-2 right-2 w-12 h-12 rounded-full bg-white/90 flex items-center justify-center text-xl text-black hover:bg-white shadow-lg"
+            title={playing ? 'Pause' : 'Play'}
+          >
+            {playing ? '❚❚' : '▶'}
           </button>
         </div>
 
-        <div className="p-4 flex-1 min-h-0 flex flex-col gap-4">
-          <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-            <video ref={videoRef} className="w-full h-full object-contain" muted playsInline loop={false} onTimeUpdate={() => { }} />
-            <div className="absolute bottom-2 left-2 right-2 flex justify-between text-xs text-white/80">
-              <span>{formatTime(previewTime)}</span>
-              <span>Trim: {formatTime(trim.start)} – {formatTime(trim.end)}</span>
+        <div className="space-y-2">
+          <div className="text-xs text-white/50">Drag handles to set in / out</div>
+          <div className="relative">
+            <div
+              ref={trackRef}
+              className="h-10 w-full rounded-lg bg-white/5 border border-white/10 select-none"
+              role="slider"
+              aria-valuemin={0}
+              aria-valuemax={duration}
+              aria-valuenow={previewTime}
+            />
+            <div className="absolute inset-0 h-10 pointer-events-none">
+              <div
+                className="absolute top-0 bottom-0 rounded bg-white/10 border border-white/20 pointer-events-none"
+                style={{ left: `${startPercent}%`, right: `${100 - endPercent}%` }}
+              />
             </div>
             <button
               type="button"
-              onClick={() => {
-                const v = videoRef.current
-                if (!v) return
-                if (playing) v.pause()
-                else {
-                  if (v.currentTime < trim.start || v.currentTime >= trim.end) v.currentTime = trim.start
-                  v.play()
-                }
+              className="absolute top-0 bottom-0 w-4 -ml-2 cursor-ew-resize rounded-l border-l-2 border-white/40 bg-white/10 hover:bg-white/20 touch-none z-10"
+              style={{ left: `${startPercent}%` }}
+              onPointerDown={(e) => {
+                e.preventDefault()
+                setDragging('start')
               }}
-              className="absolute bottom-2 right-2 w-12 h-12 rounded-full bg-white/90 flex items-center justify-center text-xl text-black hover:bg-white shadow-lg"
-              title={playing ? 'Pause' : 'Play'}
-            >
-              {playing ? '❚❚' : '▶'}
-            </button>
+              aria-label="Trim start"
+            />
+            <button
+              type="button"
+              className="absolute top-0 bottom-0 w-4 -ml-2 cursor-ew-resize rounded-r border-r-2 border-white/40 bg-white/10 hover:bg-white/20 touch-none z-10"
+              style={{ left: `${endPercent}%` }}
+              onPointerDown={(e) => {
+                e.preventDefault()
+                setDragging('end')
+              }}
+              aria-label="Trim end"
+            />
           </div>
 
-          <div className="space-y-2">
-            <div className="text-xs text-white/50">Drag handles to set in / out</div>
-            <div className="relative">
-              <div
-                ref={trackRef}
-                className="h-10 w-full rounded-lg bg-white/5 border border-white/10 select-none"
-                role="slider"
-                aria-valuemin={0}
-                aria-valuemax={duration}
-                aria-valuenow={previewTime}
-              />
-              <div className="absolute inset-0 h-10 pointer-events-none">
-                <div
-                  className="absolute top-0 bottom-0 rounded bg-white/10 border border-white/20 pointer-events-none"
-                  style={{ left: `${startPercent}%`, right: `${100 - endPercent}%` }}
-                />
-              </div>
-              <button
-                type="button"
-                className="absolute top-0 bottom-0 w-4 -ml-2 cursor-ew-resize rounded-l border-l-2 border-emerald-400 bg-emerald-500/30 hover:bg-emerald-500/50 touch-none z-10"
-                style={{ left: `${startPercent}%` }}
-                onPointerDown={(e) => {
-                  e.preventDefault()
-                  setDragging('start')
-                }}
-                aria-label="Trim start"
-              />
-              <button
-                type="button"
-                className="absolute top-0 bottom-0 w-4 -ml-2 cursor-ew-resize rounded-r border-r-2 border-amber-400 bg-amber-500/30 hover:bg-amber-500/50 touch-none z-10"
-                style={{ left: `${endPercent}%` }}
-                onPointerDown={(e) => {
-                  e.preventDefault()
-                  setDragging('end')
-                }}
-                aria-label="Trim end"
-              />
-            </div>
-
-            <div ref={waveformContainerRef} className="h-12 w-full rounded bg-black/30 overflow-hidden">
-              <WaveformCanvas
-                waveformData={waveformData}
-                duration={duration}
-                trim={trim}
-                width={waveformWidth}
-                height={48}
-                className="w-full h-full block"
-              />
-            </div>
+          <div ref={waveformContainerRef} className="h-12 w-full rounded bg-black/30 overflow-hidden">
+            <WaveformCanvas
+              waveformData={waveformData}
+              duration={duration}
+              trim={trim}
+              width={waveformWidth}
+              height={48}
+              className="w-full h-full block"
+            />
           </div>
-        </div>
-
-        <div className="px-4 py-3 border-t border-white/10 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-3 py-1.5 rounded text-sm text-white/80 hover:bg-white/10">
-            Cancel
-          </button>
-          <button type="button" onClick={handleApply} className="px-3 py-1.5 rounded text-sm bg-white text-black hover:bg-white/90">
-            Apply trim
-          </button>
         </div>
       </div>
-    </div>
+
+      <div className="px-4 py-3 border-t border-white/10 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="px-3 py-1.5 rounded text-sm text-white/80 hover:bg-white/10">
+          Cancel
+        </button>
+        <button type="button" onClick={handleApply} className="px-3 py-1.5 rounded text-sm bg-white text-black hover:bg-white/90">
+          Apply trim
+        </button>
+      </div>
+    </Modal>
   )
 }
