@@ -1,0 +1,542 @@
+import { useRef, useEffect, useState } from 'react'
+import { useStore } from '@/store'
+import { getFlyoverEditCamera } from '@/flyoverCameraRef'
+import { EditorCanvas } from '@/components/EditorCanvas'
+import { Sidebar } from '@/components/Sidebar'
+import { RightSidebar } from '@/components/RightSidebar'
+import { Timeline } from '@/components/Timeline'
+
+function isVideoDrag(e: React.DragEvent | DragEvent): boolean {
+  if (!e.dataTransfer?.types.includes('Files')) return false
+  const item = e.dataTransfer.items?.[0]
+  return item?.kind === 'file' && item.type.startsWith('video/')
+}
+
+function VideoDropOverlay({
+  onClose,
+  onDrop,
+}: {
+  onClose: () => void
+  onDrop: (file: File, type: 'background' | 'plane') => void
+}) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    const el = overlayRef.current
+    if (!el) return
+    const related = e.relatedTarget as Node | null
+    if (related != null && el.contains(related)) return
+    onClose()
+  }
+
+  const handleDrop = (e: React.DragEvent, type: 'background' | 'plane') => {
+    e.preventDefault()
+    const file = e.dataTransfer.files?.[0]
+    if (file?.type.startsWith('video/')) {
+      onDrop(file, type)
+    }
+    onClose()
+  }
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex bg-black/80 backdrop-blur-sm"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+    >
+      <div
+        className="flex-1 flex flex-col items-center justify-center gap-3 border-r border-white/20 bg-white/5 transition-colors hover:bg-emerald-950/40"
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, 'background')}
+      >
+        <span className="text-4xl opacity-60">▢</span>
+        <span className="text-lg font-medium text-white/90">Background video</span>
+        <span className="text-sm text-white/60">Drop video here</span>
+      </div>
+      <div
+        className="flex-1 flex flex-col items-center justify-center gap-3 border-l border-white/20 bg-white/5 transition-colors hover:bg-amber-950/40"
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, 'plane')}
+      >
+        <span className="text-4xl opacity-60">▢</span>
+        <span className="text-lg font-medium text-white/90">Panel video</span>
+        <span className="text-sm text-white/60">Drop video here</span>
+      </div>
+    </div>
+  )
+}
+
+function PlaybackLoop() {
+  const isPlaying = useStore((s) => s.isPlaying)
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const setCurrentTime = useStore((s) => s.setCurrentTime)
+  const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
+  const setPlaying = useStore((s) => s.setPlaying)
+  const scenes = useStore((s) => s.project.scenes)
+  const scene = scenes[currentSceneIndex]
+  const sceneStartTime = scenes
+    .slice(0, currentSceneIndex)
+    .reduce((acc, s) => acc + s.durationSeconds, 0)
+  const rafRef = useRef<number>(0)
+  const lastRef = useRef(0)
+
+  useEffect(() => {
+    if (!isPlaying || !scene) return
+    const tick = (now: number) => {
+      const dt = (now - lastRef.current) / 1000
+      lastRef.current = now
+      const state = useStore.getState()
+      const time = state.currentTime
+      const sceneStart = state.project.scenes
+        .slice(0, state.currentSceneIndex)
+        .reduce((acc, s) => acc + s.durationSeconds, 0)
+      const curScene = state.project.scenes[state.currentSceneIndex]
+      const localTime = time - sceneStart + dt
+      if (localTime >= curScene.durationSeconds) {
+        if (state.loopCurrentScene && !state.isExporting) {
+          setCurrentTime(sceneStart)
+        } else if (state.currentSceneIndex < state.project.scenes.length - 1) {
+          setCurrentSceneIndex(state.currentSceneIndex + 1)
+          setCurrentTime(sceneStart + curScene.durationSeconds)
+        } else if (state.isExporting) {
+          setPlaying(false)
+        } else {
+          setCurrentTime(0)
+          setCurrentSceneIndex(0)
+        }
+      } else {
+        setCurrentTime(time + dt)
+      }
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    lastRef.current = performance.now()
+    rafRef.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [isPlaying, currentSceneIndex, scene, sceneStartTime, scenes, setCurrentTime, setCurrentSceneIndex, setPlaying])
+
+  return null
+}
+
+function SpacebarPlayback() {
+  const setPlaying = useStore((s) => s.setPlaying)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+      e.preventDefault()
+      const isPlaying = useStore.getState().isPlaying
+      setPlaying(!isPlaying)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [setPlaying])
+
+  return null
+}
+
+export default function App() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const flyoverEditMode = useStore((s) => s.flyoverEditMode)
+  const [showDropOverlay, setShowDropOverlay] = useState(false)
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
+  const setProjectPlaneVideo = useStore((s) => s.setProjectPlaneVideo)
+  const setBackgroundTrim = useStore((s) => s.setBackgroundTrim)
+  const setPlaneTrim = useStore((s) => s.setPlaneTrim)
+
+  const handleBackgroundDragOver = (e: React.DragEvent) => {
+    if (isVideoDrag(e)) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+      setShowDropOverlay(true)
+    }
+  }
+
+  const handleDropOverlayDrop = (file: File, type: 'background' | 'plane') => {
+    const url = URL.createObjectURL(file)
+    if (type === 'background') {
+      setProjectBackgroundVideo(url)
+      setBackgroundTrim(currentSceneIndex, null)
+    } else {
+      setProjectPlaneVideo(url)
+      setPlaneTrim(currentSceneIndex, null)
+    }
+    setShowDropOverlay(false)
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex flex-col h-screen"
+      onDragOver={handleBackgroundDragOver}
+    >
+      {showDropOverlay && (
+        <VideoDropOverlay
+          onClose={() => setShowDropOverlay(false)}
+          onDrop={handleDropOverlayDrop}
+        />
+      )}
+      <PlaybackLoop />
+      <SpacebarPlayback />
+      <header className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
+        <h1 className="text-lg font-semibold tracking-tight">VVideo</h1>
+        <div className="flex items-center gap-2">
+          <ResetProjectButton />
+          <ExportButton />
+        </div>
+      </header>
+      <div className="flex flex-1 min-h-0">
+        <aside className="w-72 border-r border-white/10 overflow-y-auto shrink-0">
+          <Sidebar />
+        </aside>
+        <main className="flex-1 flex flex-col items-center justify-center gap-4 p-4 min-h-0">
+          <div
+            className="relative rounded-lg overflow-hidden"
+            style={flyoverEditMode ? { pointerEvents: 'none' } : undefined}
+          >
+            <div className="relative" style={flyoverEditMode ? { pointerEvents: 'auto' } : undefined}>
+              <EditorCanvas />
+            </div>
+          </div>
+          <CameraKeyframeButtons />
+        </main>
+        <aside className="w-72 border-l border-white/10 overflow-y-auto shrink-0 bg-zinc-900/30">
+          <RightSidebar />
+        </aside>
+      </div>
+      <div className="shrink-0 border-t border-white/10">
+        <Timeline />
+      </div>
+    </div>
+  )
+}
+
+function CameraKeyframeButtons() {
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const scene = useStore((s) => s.project.scenes[currentSceneIndex])
+  const flyoverEditMode = useStore((s) => s.flyoverEditMode)
+  const setFlyoverKeyframes = useStore((s) => s.setFlyoverKeyframes)
+
+  if (!scene?.flyover) return null
+  const { start, end } = scene.flyover
+  const defaultPos: [number, number, number] = [0, 0, 5]
+  const defaultRot: [number, number, number] = [0, 0, 0]
+  const hasStart = Boolean(
+    start?.position &&
+    (start.position[0] !== defaultPos[0] || start.position[1] !== defaultPos[1] || start.position[2] !== defaultPos[2] ||
+      start.rotation.some((r, i) => r !== defaultRot[i]))
+  )
+  const hasEnd = Boolean(
+    end?.position &&
+    (end.position[0] !== defaultPos[0] || end.position[1] !== defaultPos[1] || end.position[2] !== defaultPos[2] ||
+      end.rotation.some((r, i) => r !== defaultRot[i]))
+  )
+
+  const handleSetStart = () => {
+    const cam = getFlyoverEditCamera()
+    if (!cam) return
+    setFlyoverKeyframes(currentSceneIndex, {
+      position: [...cam.position],
+      rotation: [...cam.rotation],
+      fov: cam.fov,
+    }, end)
+  }
+
+  const handleSetEnd = () => {
+    const cam = getFlyoverEditCamera()
+    if (!cam) return
+    setFlyoverKeyframes(currentSceneIndex, start, {
+      position: [...cam.position],
+      rotation: [...cam.rotation],
+      fov: cam.fov,
+    })
+  }
+
+  const accent = '#F6F572'
+
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={handleSetStart}
+        disabled={!flyoverEditMode}
+        title={flyoverEditMode ? 'Set current view as start keyframe' : 'Enable fly-around first'}
+        className="flex flex-1 min-w-0 max-w-xs items-center justify-center gap-2 rounded-full border-2 py-2 px-5 text-sm font-medium text-white/80 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 bg-white/10 hover:bg-white/15 disabled:hover:bg-white/10 whitespace-nowrap"
+        style={{
+          borderColor: hasStart ? accent : 'transparent',
+        }}
+      >
+        <span
+          className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
+          style={{ backgroundColor: hasStart ? accent : 'rgba(255,255,255,0.4)' }}
+        />
+        {hasStart ? 'Start' : 'Set start'}
+      </button>
+      <button
+        type="button"
+        onClick={handleSetEnd}
+        disabled={!flyoverEditMode}
+        title={flyoverEditMode ? 'Set current view as end keyframe' : 'Enable fly-around first'}
+        className="flex flex-1 min-w-0 max-w-xs items-center justify-center gap-2 rounded-full border-2 py-2 px-5 text-sm font-medium text-white/80 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 bg-white/10 hover:bg-white/15 disabled:hover:bg-white/10 whitespace-nowrap"
+        style={{
+          borderColor: hasEnd ? accent : 'transparent',
+        }}
+      >
+        <span
+          className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
+          style={{ backgroundColor: hasEnd ? accent : 'rgba(255,255,255,0.4)' }}
+        />
+        {hasEnd ? 'End' : 'Set end'}
+      </button>
+    </div>
+  )
+}
+
+function ResetProjectButton() {
+  const resetProject = useStore((s) => s.resetProject)
+
+  const handleReset = () => {
+    if (window.confirm('Reset entire project? All scenes and videos will be cleared.')) {
+      resetProject()
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleReset}
+      className="px-3 py-1.5 rounded-md text-sm font-medium text-white/80 hover:text-white hover:bg-white/10"
+      title="Clear all and start over"
+    >
+      Reset project
+    </button>
+  )
+}
+
+const EXPORT_FRAMERATES = [24, 25, 30, 60] as const
+const EXPORT_BITRATES = [
+  { label: '4 Mbps', value: 4_000_000 },
+  { label: '8 Mbps', value: 8_000_000 },
+  { label: '12 Mbps', value: 12_000_000 },
+  { label: '16 Mbps', value: 16_000_000 },
+] as const
+
+function ExportButton() {
+  const isExporting = useStore((s) => s.isExporting)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [framerate, setFramerate] = useState(30)
+  const [bitrate, setBitrate] = useState(8_000_000)
+  const [content, setContent] = useState<'full' | 'plane-only'>('full')
+  const setExporting = useStore((s) => s.setExporting)
+  const setExportRenderMode = useStore((s) => s.setExportRenderMode)
+  const setPlaying = useStore((s) => s.setPlaying)
+  const project = useStore((s) => s.project)
+  const setCurrentTime = useStore((s) => s.setCurrentTime)
+  const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
+  const planeVideoUrl = useStore((s) => s.project.planeVideoUrl)
+
+  const runExport = async () => {
+    setExportRenderMode(content)
+    setExporting(true)
+    setExportDialogOpen(false)
+    setCurrentSceneIndex(0)
+    setCurrentTime(0)
+    setPlaying(true)
+    // Let canvas remount with alpha if plane-only
+    await new Promise((r) => setTimeout(r, 100))
+    const canvas = document.querySelector('canvas')
+    if (!canvas) {
+      setExporting(false)
+      setExportRenderMode('full')
+      setPlaying(false)
+      return
+    }
+    const stream = canvas.captureStream(framerate)
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : 'video/webm'
+    const recorder = new MediaRecorder(stream, {
+      mimeType: mime,
+      videoBitsPerSecond: bitrate,
+    })
+    const chunks: Blob[] = []
+    recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'video/webm' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      const suffix = content === 'plane-only' ? '-panel' : ''
+      a.download = `${project.name || 'export'}${suffix}.webm`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      setExporting(false)
+      setExportRenderMode('full')
+      setPlaying(false)
+    }
+    recorder.start(100)
+    const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
+    await new Promise((r) => setTimeout(r, totalDuration * 1000 + 500))
+    recorder.stop()
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setExportDialogOpen(true)}
+        disabled={isExporting}
+        className="px-3 py-1.5 rounded-md bg-white text-black text-sm font-medium hover:bg-gray-200 disabled:opacity-50"
+      >
+        {isExporting ? 'Exporting…' : 'Export'}
+      </button>
+      {exportDialogOpen && (
+        <ExportDialog
+          framerate={framerate}
+          setFramerate={setFramerate}
+          bitrate={bitrate}
+          setBitrate={setBitrate}
+          content={content}
+          setContent={setContent}
+          hasPlaneVideo={!!planeVideoUrl}
+          onClose={() => setExportDialogOpen(false)}
+          onExport={runExport}
+        />
+      )}
+    </>
+  )
+}
+
+function ExportDialog({
+  framerate,
+  setFramerate,
+  bitrate,
+  setBitrate,
+  content,
+  setContent,
+  hasPlaneVideo,
+  onClose,
+  onExport,
+}: {
+  framerate: number
+  setFramerate: (n: number) => void
+  bitrate: number
+  setBitrate: (n: number) => void
+  content: 'full' | 'plane-only'
+  setContent: (c: 'full' | 'plane-only') => void
+  hasPlaneVideo: boolean
+  onClose: () => void
+  onExport: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-5 shadow-xl">
+        <h2 className="text-lg font-semibold text-white mb-4">Export options</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
+              Framerate
+            </label>
+            <div className="flex gap-2">
+              {EXPORT_FRAMERATES.map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFramerate(f)}
+                  className={`flex-1 px-2 py-2 rounded text-sm font-medium ${framerate === f ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'
+                    }`}
+                >
+                  {f} fps
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
+              Bitrate
+            </label>
+            <select
+              value={bitrate}
+              onChange={(e) => setBitrate(Number(e.target.value))}
+              className="w-full px-3 py-2 rounded bg-white/10 border border-white/10 text-white text-sm"
+            >
+              {EXPORT_BITRATES.map(({ label, value }) => (
+                <option key={value} value={value} className="bg-zinc-900">
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
+              Export content
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10">
+                <input
+                  type="radio"
+                  name="export-content"
+                  checked={content === 'full'}
+                  onChange={() => setContent('full')}
+                  className="text-white"
+                />
+                <div>
+                  <span className="text-sm font-medium text-white">Full composite</span>
+                  <p className="text-xs text-white/50 mt-0.5">
+                    Background + panel video, camera, effects (WebM)
+                  </p>
+                </div>
+              </label>
+              <label
+                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${hasPlaneVideo
+                    ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                    : 'border-white/5 bg-white/5 opacity-60 cursor-not-allowed'
+                  }`}
+              >
+                <input
+                  type="radio"
+                  name="export-content"
+                  checked={content === 'plane-only'}
+                  onChange={() => hasPlaneVideo && setContent('plane-only')}
+                  disabled={!hasPlaneVideo}
+                  className="text-white"
+                />
+                <div>
+                  <span className="text-sm font-medium text-white">Panel only (transparent)</span>
+                  <p className="text-xs text-white/50 mt-0.5">
+                    {hasPlaneVideo
+                      ? 'Panel video + effects, transparent background (WebM with alpha)'
+                      : 'Add a panel video in the sidebar to use this'}
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-white/80 bg-white/10 hover:bg-white/20"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onExport}
+            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white text-black hover:bg-gray-200"
+          >
+            Start export
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
