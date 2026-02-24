@@ -4,6 +4,14 @@ import { useStore } from '@/store'
 import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
 import { parseNum, clamp } from '@/utils/numbers'
 import type { Pane, PlaneMedia, SceneText } from '@/types'
+import { VideoThumbnail } from './VideoThumbnail'
+
+/** Example clip videos in public/example-assets/clips/. */
+const EXAMPLE_CLIP_PATHS = [
+  '/example-assets/clips/RAUSCH-screen.webm',
+  '/example-assets/clips/ko.webm',
+  '/example-assets/clips/reach.webm',
+]
 
 function getMediaTypeFromFile(file: File): 'video' | 'image' {
   if (file.type.startsWith('video/')) return 'video'
@@ -234,7 +242,24 @@ export function PanesPanel() {
         Multiple video/image layers. Z-order: lower index = behind. Enable animation to animate over the scene.
       </p>
       {panes.length === 0 && texts.length === 0 ? (
-        <EmptyPaneDropZone onDrop={addPaneWithMedia} />
+        <>
+          <EmptyPaneDropZone onDrop={addPaneWithMedia} />
+          <div className="mt-3">
+            <span className={smallLabelClass}>Example clips</span>
+            <div className="grid grid-cols-3 gap-1 mt-1">
+              {EXAMPLE_CLIP_PATHS.map((path) => (
+                <button
+                  key={path}
+                  type="button"
+                  onClick={() => addPaneWithMedia({ type: 'video', url: path })}
+                  className="w-14 rounded border border-white/10 overflow-hidden bg-black/30 flex shrink-0 focus:outline-none focus:ring-1 focus:ring-white/30 hover:border-white/20"
+                >
+                  <VideoThumbnail url={path} time={0} className="border-0 w-full h-full !aspect-video" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       ) : (
         <div className="space-y-3">
           {panes.map((pane, index) => (
@@ -260,6 +285,21 @@ export function PanesPanel() {
             />
           ))}
           <EmptyPaneDropZone compact onDrop={addPaneWithMedia} />
+          <div className="mt-2">
+            <span className={smallLabelClass}>Example clips</span>
+            <div className="grid grid-cols-3 gap-1 mt-1">
+              {EXAMPLE_CLIP_PATHS.map((path) => (
+                <button
+                  key={path}
+                  type="button"
+                  onClick={() => addPaneWithMedia({ type: 'video', url: path })}
+                  className="w-14 rounded border border-white/10 overflow-hidden bg-black/30 flex shrink-0 focus:outline-none focus:ring-1 focus:ring-white/30 hover:border-white/20"
+                >
+                  <VideoThumbnail url={path} time={0} className="border-0 w-full h-full !aspect-video" />
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </section>

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.12.25 — 2026-02-25
+
+**Handheld camera shake now works without flyover keyframes.**
+
+- Previously, camera shake only applied when a scene had flyover keyframes.
+- Shake now works even when there are no camera keyframes, using the current camera position as base.
+
+---
+
 ## 1.12.24 — 2026-02-25
 
 **Text layers now appear in the Layers list.**

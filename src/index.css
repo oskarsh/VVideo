@@ -15,21 +15,29 @@ body {
 
 /* Minimal range sliders */
 input[type='range'] {
-  @apply h-1 w-full appearance-none bg-white/10 rounded-full accent-white/80;
+  @apply w-full appearance-none bg-white/10 rounded-full accent-white/80;
+  height: 24px;
+  min-height: 24px;
 }
 
 input[type='range']::-webkit-slider-thumb {
-  @apply appearance-none w-2.5 h-2.5 rounded-full bg-white/90 cursor-pointer border-0;
+  @apply appearance-none rounded-full bg-white/90 cursor-pointer border-0;
+  width: 14px;
+  height: 14px;
 }
 
 input[type='range']::-moz-range-thumb {
-  @apply w-2.5 h-2.5 rounded-full bg-white/90 cursor-pointer border-0;
+  @apply rounded-full bg-white/90 cursor-pointer border-0;
+  width: 14px;
+  height: 14px;
 }
 
 input[type='range']::-webkit-slider-runnable-track {
   @apply bg-white/10 rounded-full;
+  height: 6px;
 }
 
 input[type='range']::-moz-range-track {
   @apply bg-white/10 rounded-full;
+  height: 6px;
 }

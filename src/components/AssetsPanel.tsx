@@ -2,12 +2,14 @@ import { useRef } from 'react'
 import { useStore } from '@/store'
 import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
 import { VideoThumbnail } from './VideoThumbnail'
-import { getPanesForRender } from '@/types'
 
-/** Example background videos in public/example-assets/Background/ (1.mp4 … 4.mp4). */
-const EXAMPLE_BACKGROUND_PATHS = ['1.mp4', '2.mp4', '3.mp4', '4.mp4'].map(
-  (name) => `/example-assets/Background/${name}`
-)
+/** Example background videos in public/example-assets/Background/. */
+const EXAMPLE_BACKGROUND_PATHS = [
+  '/example-assets/Background/dots.webm',
+  '/example-assets/Background/liquid.webm',
+  '/example-assets/Background/triangle.webm',
+  '/example-assets/Background/tunnel-square.webm',
+]
 
 export function AssetsPanel() {
   const project = useStore((s) => s.project)
@@ -18,8 +20,6 @@ export function AssetsPanel() {
   const setProjectBackgroundVideoContinuous = useStore((s) => s.setProjectBackgroundVideoContinuous)
   const scene = project.scenes[currentSceneIndex]
   const hasVideo = Boolean(project.backgroundVideoUrl)
-  const panes = getPanesForRender(project)
-  const texts = scene?.texts ?? []
   const aspectRatio = project.aspectRatio
   const is16x9 = aspectRatio[0] === 16 && aspectRatio[1] === 9
   const is9x16 = aspectRatio[0] === 9 && aspectRatio[1] === 16
@@ -134,42 +134,6 @@ export function AssetsPanel() {
             )
           })}
         </div>
-      </div>
-
-      <div>
-        <span className={smallLabelClass}>Layers</span>
-        {panes.length === 0 && texts.length === 0 ? (
-          <p className="text-xs text-white/40 italic">No layers. Add below.</p>
-        ) : panes.length === 0 ? (
-          <p className="text-xs text-white/40 italic">
-            {texts.length} text layer{texts.length !== 1 ? 's' : ''}. Add video/image below.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {panes.map((pane, i) => (
-              <li
-                key={pane.id}
-                className="rounded border border-white/10 overflow-hidden bg-black/30 flex items-center gap-2"
-              >
-                <div className="w-14 shrink-0 aspect-video bg-black/50">
-                  {pane.media.type === 'video' ? (
-                    <VideoThumbnail url={pane.media.url} time={0} className="rounded-none border-0 w-full h-full" />
-                  ) : (
-                    <img src={pane.media.url} alt="" className="w-full h-full object-contain" />
-                  )}
-                </div>
-                <span className="text-xs text-white/70 truncate flex-1">Layer {i + 1}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="pt-2 border-t border-white/10">
-        <span className={smallLabelClass}>Track</span>
-        <p className="text-xs text-white/60">
-          1 track · {project.scenes.length} scene{project.scenes.length !== 1 ? 's' : ''}
-        </p>
       </div>
 
       <div>

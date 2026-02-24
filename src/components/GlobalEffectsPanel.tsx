@@ -9,9 +9,9 @@ import {
 import type { Scene, GlobalEffectType, Project } from '@/types'
 import type { SceneEffectDither } from '@/types'
 import { getFlyoverStateAt } from '@/lib/flyover'
-import { EFFECT_DISPLAY_NAMES } from '@/lib/effectLabels'
+import { GLOBAL_EFFECT_LABELS } from '@/lib/effectLabels'
 import { inputClass } from '@/constants/ui'
-import { DITHER_MODES } from './EffectsPanel'
+import { DITHER_MODES } from '@/constants/effects'
 
 export const GLOBAL_EFFECT_TYPES: GlobalEffectType[] = [
   'camera',
@@ -25,9 +25,6 @@ export const GLOBAL_EFFECT_TYPES: GlobalEffectType[] = [
   'vignette',
   'scanline',
 ]
-
-/** Backward-compat alias for RightSidebar etc.; prefer EFFECT_DISPLAY_NAMES from @/lib/effectLabels. */
-export const EFFECT_LABELS = EFFECT_DISPLAY_NAMES as Record<GlobalEffectType, string>
 
 /** Build effect state at time from scene (for "add keyframe" when no global track yet). */
 export function getSceneEffectStateAtTime(
@@ -231,19 +228,22 @@ function SliderWithKeyframe({
     <div className="flex items-center gap-1 group">
       <div className="flex-1 min-w-0">
         <span className="text-[11px] text-white/50 block">{label}</span>
-        <div className="flex items-center gap-1 mt-0.5">
-          <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value)
-              onKeyframe({ [paramKey]: v })
-            }}
-            className="flex-1 min-w-0 h-2 block"
-          />
+        <div className="flex items-center gap-1 mt-0.5 min-h-8">
+          <div className="flex-1 min-w-0 flex items-center" style={{ minHeight: 24 }}>
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={step}
+              value={value}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value)
+                onKeyframe({ [paramKey]: v })
+              }}
+              className="w-full block"
+              style={{ minWidth: 60, height: 24 }}
+            />
+          </div>
           <span className="text-[10px] text-white/40 w-8 shrink-0">{format(value)}</span>
         </div>
       </div>
@@ -287,7 +287,7 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
       {effectTypesToRender.map((effectType) => {
         const track = project.globalEffects?.[effectType]
         const hasTrack = track && track.keyframes.length > 0
-        const label = EFFECT_LABELS[effectType]
+        const label = GLOBAL_EFFECT_LABELS[effectType]
         const state = getStateAtPlayhead(project, effectType, currentTime, scene, sceneLocalTime, sceneDuration)
         const onKf = (patch: Record<string, unknown>) => {
           if (hasTrack) {

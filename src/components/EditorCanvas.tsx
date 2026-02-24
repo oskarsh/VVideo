@@ -577,13 +577,18 @@ function CameraRig({
 
   useFrame((_state, delta) => {
     if (disabled) return
-    // When there are no flyover keyframes, leave the camera where it is (do not reset to default).
-    if (keyframes.length === 0) return
     let pos: [number, number, number]
     let rot: [number, number, number]
     let fov = FOV_DEG
 
-    if (keyframes.length === 1) {
+    if (keyframes.length === 0) {
+      // No flyover keyframes: use current camera as base so handheld shake still works.
+      pos = [camera.position.x, camera.position.y, camera.position.z]
+      rot = [camera.rotation.x, camera.rotation.y, camera.rotation.z]
+      fov = 'fov' in camera && Number.isFinite((camera as THREE.PerspectiveCamera).fov)
+        ? (camera as THREE.PerspectiveCamera).fov
+        : FOV_DEG
+    } else if (keyframes.length === 1) {
       const k = keyframes[0]
       pos = [...k.position]
       rot = [...k.rotation]

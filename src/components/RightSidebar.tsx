@@ -1,15 +1,16 @@
+import { useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '@/store'
 import { useFloatingPanels } from '@/hooks/useFloatingPanels'
 import { DEFAULT_DITHER } from '@/types'
 import { getGlobalEffectStateAtTime } from '@/lib/globalEffects'
+import { GLOBAL_EFFECT_LABELS } from '@/lib/effectLabels'
 import { DraggableEffectWindow } from './DraggableEffectWindow'
 import { FlyoverPanel } from './FlyoverPanel'
 import { PanelRow } from './PanelRow'
 import {
   GlobalEffectsPanel,
   GLOBAL_EFFECT_TYPES,
-  EFFECT_LABELS,
   getSceneEffectStateAtTime,
 } from './GlobalEffectsPanel'
 import type { GlobalEffectType } from '@/types'
@@ -48,21 +49,28 @@ export function RightSidebar() {
   const sceneLocalTime = scene ? currentTime - sceneStartTime : 0
   const sceneDuration = scene?.durationSeconds ?? 0
 
-  const getEffectEnabled = (effectType: GlobalEffectType) => {
-    const track = project.globalEffects?.[effectType]
-    if (track) {
-      const state = getGlobalEffectStateAtTime(project, effectType, currentTime)
-      return state != null && (state as Record<string, unknown>).enabled !== false
+  const effectEnabledMap = useMemo(() => {
+    const computeEnabled = (effectType: GlobalEffectType): boolean => {
+      const track = project.globalEffects?.[effectType]
+      if (track) {
+        const state = getGlobalEffectStateAtTime(project, effectType, currentTime)
+        return state != null && (state as Record<string, unknown>).enabled !== false
+      }
+      if (effectType === 'dither') return dither.enabled
+      const state =
+        getGlobalEffectStateAtTime(project, effectType, currentTime) ??
+        (scene ? getSceneEffectStateAtTime(scene, effectType, sceneLocalTime, sceneDuration) : null)
+      if (!state) return false
+      const s = state as Record<string, unknown>
+      if ('enabled' in s && typeof s.enabled === 'boolean') return s.enabled
+      return true
     }
-    if (effectType === 'dither') return dither.enabled
-    const state =
-      getGlobalEffectStateAtTime(project, effectType, currentTime) ??
-      (scene ? getSceneEffectStateAtTime(scene, effectType, sceneLocalTime, sceneDuration) : null)
-    if (!state) return false
-    const s = state as Record<string, unknown>
-    if ('enabled' in s && typeof s.enabled === 'boolean') return s.enabled
-    return true
-  }
+    return Object.fromEntries(
+      GLOBAL_EFFECT_TYPES.map((t) => [t, computeEnabled(t)])
+    ) as Record<GlobalEffectType, boolean>
+  }, [project, currentTime, dither.enabled, scene, sceneLocalTime, sceneDuration])
+
+  const getEffectEnabled = (effectType: GlobalEffectType) => effectEnabledMap[effectType]
 
   const handleEffectToggle = (effectType: GlobalEffectType) => {
     const track = project.globalEffects?.[effectType]
@@ -86,7 +94,7 @@ export function RightSidebar() {
       {GLOBAL_EFFECT_TYPES.map((effectType) => (
         <PanelRow
           key={effectType}
-          title={EFFECT_LABELS[effectType]}
+          title={GLOBAL_EFFECT_LABELS[effectType]}
           enabled={getEffectEnabled(effectType)}
           onToggleEnabled={() => handleEffectToggle(effectType)}
           onClick={() => togglePanel(effectType)}
@@ -119,7 +127,7 @@ export function RightSidebar() {
                 <DraggableEffectWindow
                   key={effectType}
                   id={`panel-${effectType}`}
-                  title={EFFECT_LABELS[effectType]}
+                  title={GLOBAL_EFFECT_LABELS[effectType]}
                   defaultX={(panelPositions[effectType] ?? positionByKey[effectType] ?? { x: 320, y: 60 }).x}
                   defaultY={(panelPositions[effectType] ?? positionByKey[effectType] ?? { x: 320, y: 60 }).y}
                   width={320}

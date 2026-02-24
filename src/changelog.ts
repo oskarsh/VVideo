@@ -14,6 +14,15 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '1.12.25',
+    date: '2026-02-25',
+    summary: 'Handheld camera shake now works without flyover keyframes.',
+    items: [
+      'Previously, camera shake only applied when a scene had flyover keyframes.',
+      'Shake now works even when there are no camera keyframes, using the current camera position as base.',
+    ],
+  },
+  {
     version: '1.12.24',
     date: '2026-02-25',
     summary: 'Text layers now appear in the Layers list.',

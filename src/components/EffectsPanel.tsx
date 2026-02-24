@@ -21,6 +21,7 @@ import type {
 } from '@/types'
 import { EFFECT_DISPLAY_NAMES } from '@/lib/effectLabels'
 import { inputClass } from '@/constants/ui'
+import { DITHER_MODES } from '@/constants/effects'
 
 function effectKey(sceneIndex: number, effectIndex: number) {
   return `${sceneIndex}-${effectIndex}`
@@ -512,16 +513,6 @@ const DITHER_PRESETS: { value: SceneEffectDither['preset']; label: string }[] = 
   { value: 'custom', label: 'Custom' },
 ]
 
-export const DITHER_MODES: { value: SceneEffectDither['mode']; label: string }[] = [
-  { value: 'bayer2', label: 'Bayer 2×2' },
-  { value: 'bayer4', label: 'Bayer 4×4' },
-  { value: 'bayer8', label: 'Bayer 8×8' },
-  { value: 'bayer16', label: 'Bayer 16×16' },
-  { value: 'random', label: 'Random' },
-  { value: 'valueNoise', label: 'Value noise' },
-  { value: 'halftone', label: 'Halftone (dot)' },
-  { value: 'lines', label: 'Line screen' },
-]
 
 export function DitherControls({
   eff,
