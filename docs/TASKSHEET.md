@@ -39,6 +39,8 @@ These are completed; no need to redo.
 | Trim editor single owner | Store: `trimEditorOpen`, `setTrimEditorOpen`. **TrimEditorSlot** in App renders TrimEditorModal once. **CurrentScenePanel** and **ScenePanel** call setTrimEditorOpen only; no local trim state or modal. |
 | ScenePanel JSX repair | ScenePanel.tsx had corrupted JSX (broken tags like `ton`, `nput`, `o nClick`). Repaired full component; uses `sectionHeadingClass`/`smallLabelClass`, `parseNum`/`clamp`; early return when no scene. |
 | **Generated background UI removed** | AssetsPanel no longer offers "Or generate texture" (Gradient/Terrain/Noise/Dots). Background slot is **video only** in the UI. Types/store/canvas still have `backgroundTexture` for backwards compatibility; no UI to set it. |
+| **sectionHeadingClass / smallLabelClass** | AssetsPanel, TextPanel, PanesPanel, FlyoverPanel, CurrentScenePanel import from `src/constants/ui`; CollapsibleSection uses sectionHeadingClass for headings. |
+| **parseNum / clamp in panels** | TextPanel (font size, padding), PanesPanel (position X/Y/Z), CurrentScenePanel (duration) use `src/utils/numbers` for number inputs. |
 
 ---
 
@@ -60,12 +62,14 @@ Do in this order unless the user asks otherwise. **Whenever you complete a task:
 - Shared PanelRow component — `src/components/PanelRow.tsx`
 - **Trim editor: single owner** — Store has `trimEditorOpen` / `setTrimEditorOpen`; single `TrimEditorSlot` in App renders TrimEditorModal; CurrentScenePanel and ScenePanel only call setTrimEditorOpen. ScenePanel JSX fixed so it builds.
 - **ScenePanel JSX repair** — ScenePanel had corrupted JSX (broken tag names/attrs); fully repaired, uses ui constants and number helpers, builds.
+- **sectionHeadingClass / smallLabelClass** — Used in AssetsPanel, TextPanel, PanesPanel, FlyoverPanel, CurrentScenePanel; CollapsibleSection uses sectionHeadingClass.
+- **parseNum / clamp** — Used in TextPanel (font size, padding), PanesPanel (position X/Y/Z), CurrentScenePanel (duration); remaining panels can be migrated incrementally.
 
 ### To do (medium impact)
 
-- **Use `sectionHeadingClass` / `smallLabelClass`** — From `src/constants/ui.ts` in panels that still use long class strings. **Files:** AssetsPanel, TextPanel, PanesPanel, FlyoverPanel, CurrentScenePanel (and optionally CollapsibleSection). **References:** CODEBASE-REVIEW § 1.3. Can be split by file (one agent per panel).
+- ~~**Use `sectionHeadingClass` / `smallLabelClass`** — From `src/constants/ui.ts` in panels that still use long class strings. **Files:** AssetsPanel, TextPanel, PanesPanel, FlyoverPanel, CurrentScenePanel (and optionally CollapsibleSection). **References:** CODEBASE-REVIEW § 1.3. Can be split by file (one agent per panel).~~ **Done.**
 
-- **Use `parseNum` / `clamp`** — From `src/utils/numbers.ts` in panels; migrate incrementally. **Files:** Many (AssetsPanel, TextPanel, CurveEditor, Timeline, CurrentScenePanel, ScenePanel, PanesPanel, EffectsPanel, GlobalEffectsPanel). **References:** CODEBASE-REVIEW § 1.8. Can be split by file (one agent per file or per panel).
+- ~~**Use `parseNum` / `clamp`** — From `src/utils/numbers.ts` in panels; migrate incrementally. **Files:** Many (AssetsPanel, TextPanel, CurveEditor, Timeline, CurrentScenePanel, ScenePanel, PanesPanel, EffectsPanel, GlobalEffectsPanel). **References:** CODEBASE-REVIEW § 1.8. Can be split by file (one agent per file or per panel).~~ **Done in TextPanel, PanesPanel, CurrentScenePanel this pass; remaining files can be migrated incrementally.**
 
 - **CollapsibleSection** — Use in more panels for section headers, or document when to use. **Files:** Any panel not yet using it (AssetsPanel, EffectsPanel rows, RightSidebar, etc.). **References:** CODEBASE-REVIEW § 2.6. Overlaps with sectionHeadingClass and other panel work — assign to one agent per panel.
 
@@ -79,7 +83,7 @@ Do in this order unless the user asks otherwise. **Whenever you complete a task:
 
 ## 4. How to use this tasksheet
 
-**Recommended next (in order):** (1) Fix remaining build errors (EditorCanvas, etc.). (2) sectionHeadingClass/smallLabelClass, parseNum/clamp migration, CollapsibleSection, callback naming.
+**Recommended next (in order):** (1) Fix remaining build errors (EditorCanvas, etc.). (2) CollapsibleSection in more panels, callback naming. (3) parseNum/clamp in remaining files (CurveEditor, Timeline, EffectsPanel, GlobalEffectsPanel) as needed.
 
 **When running multiple agents:** Read §5 first; assign tasks by file/lane so no two agents edit the same file.
 
@@ -106,17 +110,17 @@ To avoid one agent blocking another or both modifying the same code:
 |------|----------------|-------------------------|------------------------------|
 | Fix ScenePanel.tsx | `ScenePanel.tsx` | — | Any task that does **not** touch `ScenePanel.tsx` |
 | Trim editor (single owner/hook) | ~~`CurrentScenePanel.tsx`, `ScenePanel.tsx`~~ **Done.** Store + TrimEditorSlot; panels use setTrimEditorOpen. | — | — |
-| sectionHeadingClass / smallLabelClass | `AssetsPanel.tsx`, `TextPanel.tsx`, `PanesPanel.tsx`, `FlyoverPanel.tsx`, `CurrentScenePanel.tsx` | CODEBASE-REVIEW § 1.3 | Split by file: Agent A = Assets + Text, Agent B = Panes + Flyover, Agent C = CurrentScene |
-| parseNum / clamp | Many panels (see task) | CODEBASE-REVIEW § 1.8 | Split by file: assign each panel to at most one agent |
+| sectionHeadingClass / smallLabelClass | ~~`AssetsPanel.tsx`, `TextPanel.tsx`, `PanesPanel.tsx`, `FlyoverPanel.tsx`, `CurrentScenePanel.tsx`~~ **Done.** CollapsibleSection uses sectionHeadingClass. | CODEBASE-REVIEW § 1.3 | — |
+| parseNum / clamp | ~~TextPanel, PanesPanel, CurrentScenePanel~~ **Done this pass.** Remaining: CurveEditor, Timeline, EffectsPanel, GlobalEffectsPanel, etc. | CODEBASE-REVIEW § 1.8 | Split by file when continuing. |
 | CollapsibleSection | Various panels | § 2.6; overlaps sectionHeading | One agent per panel; avoid same panel as sectionHeading/parseNum in same run |
 | Callback naming | PanesPanel, others | § 2.7 | Do last or when already touching that panel |
 
 ### Suggested parallel lanes (example)
 
 - **Lane 1 (single agent):** ~~Fix ScenePanel.tsx → then Trim editor.~~ Trim editor done; ScenePanel builds. **AssetsPanel** no longer has BackgroundTexture build errors (generated-background UI removed). Remaining: fix other build errors (EditorCanvas, etc.).
-- **Lane 2:** sectionHeadingClass in AssetsPanel + TextPanel (one agent).
-- **Lane 3:** sectionHeadingClass in PanesPanel + FlyoverPanel + CurrentScenePanel (another agent).
-- **Lane 4:** parseNum/clamp in 2–3 panels that Lane 2 and 3 are **not** touching (e.g. EffectsPanel, GlobalEffectsPanel, Timeline).
+- **Lane 2:** ~~sectionHeadingClass in AssetsPanel + TextPanel.~~ Done.
+- **Lane 3:** ~~sectionHeadingClass in PanesPanel + FlyoverPanel + CurrentScenePanel.~~ Done.
+- **Lane 4:** ~~parseNum/clamp in 2–3 panels.~~ Done in TextPanel, PanesPanel, CurrentScenePanel. Remaining: CurveEditor, Timeline, EffectsPanel, GlobalEffectsPanel as needed.
 
 Before starting, each agent should **claim** its files in the tasksheet (e.g. add a line "Agent A: AssetsPanel, TextPanel") or work in a branch and merge in an order that avoids conflicts.
 

@@ -1,6 +1,8 @@
 /**
- * Global effect keyframes: sample effect state at a given project time.
- * When project.globalEffects[type] has keyframes, we interpolate; otherwise return null (caller uses per-scene).
+ * Global effect state at a given project time.
+ * - If no track: return null (caller uses per-scene or project.dither).
+ * - If track exists with no keyframes: return state from track.enabled + default params (toggle on/off only).
+ * - If track has keyframes: interpolate at time and return state.
  */
 
 import type {
@@ -16,6 +18,7 @@ import type {
   GlobalEffectKeyframeGlitch,
   GlobalEffectKeyframeVignette,
   GlobalEffectKeyframeScanline,
+  GlitchAlgorithm,
 } from '@/types'
 
 function lerpNum(a: number, b: number, t: number): number {
@@ -92,8 +95,94 @@ export function getGlobalEffectStateAtTime(
   time: number
 ): Record<string, unknown> | null {
   const track = project.globalEffects?.[effectType]
-  if (!track?.keyframes?.length) return null
+  if (!track) return null
   const kfs = track.keyframes as unknown as Array<Record<string, unknown>>
+  const hasKeyframes = kfs?.length > 0
+  // When track exists but has no keyframes: effect on/off is track.enabled only; use defaults for params.
+  if (!hasKeyframes) {
+    const enabled = track.enabled !== false
+    const def = DEFAULT_GLOBAL_KEYFRAMES[effectType] as unknown as Record<string, unknown>
+    switch (effectType) {
+      case 'camera':
+        return { enabled, fov: def.fov ?? 50 }
+      case 'grain':
+        return { type: 'grain', enabled, startOpacity: def.opacity ?? 0.06, endOpacity: def.opacity ?? 0.06 }
+      case 'dither':
+        return {
+          type: 'dither',
+          enabled,
+          preset: def.preset ?? 'medium',
+          mode: def.mode ?? 'bayer4',
+          levels: def.levels ?? 8,
+          intensity: def.intensity ?? 1,
+          luminanceOnly: def.luminanceOnly ?? false,
+          thresholdBias: def.thresholdBias ?? 0,
+        }
+      case 'dof':
+        return {
+          type: 'dof',
+          enabled,
+          focusDistanceStart: def.focusDistance ?? 0.015,
+          focusDistanceEnd: def.focusDistance ?? 0.015,
+          focalLengthStart: def.focalLength ?? 0.02,
+          focalLengthEnd: def.focalLength ?? 0.02,
+          focusRangeStart: def.focusRange ?? 0.22,
+          focusRangeEnd: def.focusRange ?? 0.22,
+          bokehScaleStart: def.bokehScale ?? 2.8,
+          bokehScaleEnd: def.bokehScale ?? 2.8,
+        }
+      case 'handheld':
+        return {
+          type: 'handheld',
+          enabled,
+          intensityStart: def.intensity ?? 0.012,
+          intensityEnd: def.intensity ?? 0.012,
+          rotationShakeStart: def.rotationShake ?? 0.008,
+          rotationShakeEnd: def.rotationShake ?? 0.008,
+          speedStart: def.speed ?? 1.2,
+          speedEnd: def.speed ?? 1.2,
+        }
+      case 'chromaticAberration':
+        return {
+          type: 'chromaticAberration',
+          enabled,
+          offsetStart: def.offset ?? 0.005,
+          offsetEnd: def.offset ?? 0.005,
+          radialModulation: true,
+        }
+      case 'lensDistortion':
+        return {
+          type: 'lensDistortion',
+          enabled,
+          distortionStart: def.distortion ?? 0.05,
+          distortionEnd: def.distortion ?? 0.05,
+        }
+      case 'glitch':
+        return {
+          type: 'glitch',
+          enabled,
+          algorithm: (def as unknown as GlobalEffectKeyframeGlitch).algorithm ?? 'sporadic',
+          ratio: def.ratio ?? 0.85,
+          columns: def.columns ?? 0.05,
+          delayMin: def.delayMin ?? 1.5,
+          delayMax: def.delayMax ?? 3.5,
+          durationMin: def.durationMin ?? 0.6,
+          durationMax: def.durationMax ?? 1,
+          monochrome: def.monochrome ?? false,
+        }
+      case 'vignette':
+        return { type: 'vignette', enabled, offset: def.offset ?? 0.5, darkness: def.darkness ?? 0.5 }
+      case 'scanline':
+        return {
+          type: 'scanline',
+          enabled,
+          density: def.density ?? 1.5,
+          scrollSpeed: def.scrollSpeed ?? 0,
+        }
+      default:
+        return null
+    }
+  }
   const enabled = track.enabled !== false && (sampleBool(kfs, time, 'enabled', true) ?? true)
 
   switch (effectType) {
@@ -163,7 +252,7 @@ export function getGlobalEffectStateAtTime(
       return {
         type: 'glitch',
         enabled,
-        mode: sampleNearest<'sporadic' | 'constantMild'>(kfs, time, 'mode', 'sporadic'),
+        algorithm: sampleNearest(kfs, time, 'algorithm', 'sporadic'),
         ratio: sampleNum(kfs, time, 'ratio', 0.85),
         columns: sampleNum(kfs, time, 'columns', 0.05),
         delayMin: sampleNum(kfs, time, 'delayMin', 1.5),
@@ -225,7 +314,7 @@ export const DEFAULT_GLOBAL_KEYFRAMES: Record<GlobalEffectType, GlobalEffectKeyf
   glitch: {
     time: 0,
     enabled: false,
-    mode: 'sporadic',
+    algorithm: 'sporadic',
     ratio: 0.85,
     columns: 0.05,
     delayMin: 1.5,
@@ -262,7 +351,7 @@ export function createKeyframeAtTime(
         time,
         enabled: (currentState.enabled ?? def.enabled) as boolean,
         preset: (currentState.preset ?? (DEFAULT_GLOBAL_KEYFRAMES.dither as GlobalEffectKeyframeDither).preset) as 'subtle' | 'medium' | 'strong' | 'custom',
-        mode: (currentState.mode ?? (DEFAULT_GLOBAL_KEYFRAMES.dither as GlobalEffectKeyframeDither).mode) as 'bayer2' | 'bayer4' | 'bayer8' | 'random',
+        mode: (currentState.mode ?? (DEFAULT_GLOBAL_KEYFRAMES.dither as GlobalEffectKeyframeDither).mode) as GlobalEffectKeyframeDither['mode'],
         levels: (currentState.levels ?? (DEFAULT_GLOBAL_KEYFRAMES.dither as GlobalEffectKeyframeDither).levels) as number,
         intensity: (currentState.intensity ?? (DEFAULT_GLOBAL_KEYFRAMES.dither as GlobalEffectKeyframeDither).intensity) as number,
         luminanceOnly: (currentState.luminanceOnly ?? (DEFAULT_GLOBAL_KEYFRAMES.dither as GlobalEffectKeyframeDither).luminanceOnly) as boolean,
@@ -301,7 +390,7 @@ export function createKeyframeAtTime(
       return {
         time,
         enabled: (currentState.enabled ?? def.enabled) as boolean,
-        mode: (currentState.mode ?? (DEFAULT_GLOBAL_KEYFRAMES.glitch as GlobalEffectKeyframeGlitch).mode) as 'sporadic' | 'constantMild',
+        algorithm: (currentState.algorithm ?? (DEFAULT_GLOBAL_KEYFRAMES.glitch as GlobalEffectKeyframeGlitch).algorithm ?? 'sporadic') as GlitchAlgorithm,
         ratio: (currentState.ratio ?? (DEFAULT_GLOBAL_KEYFRAMES.glitch as GlobalEffectKeyframeGlitch).ratio) as number,
         columns: (currentState.columns ?? (DEFAULT_GLOBAL_KEYFRAMES.glitch as GlobalEffectKeyframeGlitch).columns) as number,
         delayMin: (currentState.delayMin ?? (DEFAULT_GLOBAL_KEYFRAMES.glitch as GlobalEffectKeyframeGlitch).delayMin) as number,

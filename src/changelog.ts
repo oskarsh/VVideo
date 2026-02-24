@@ -14,6 +14,125 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '1.12.24',
+    date: '2026-02-25',
+    summary: 'Text layers now appear in the Layers list.',
+    items: [
+      'When you add text via the Layers + menu, it now shows up in the Layers list alongside video/image panes.',
+      'Each text layer shows a preview and a remove button.',
+      'TextPanel added to the left sidebar so you can edit text content, font, position, and mode (3D or static).',
+    ],
+  },
+  {
+    version: '1.12.23',
+    date: '2026-02-25',
+    summary: 'Export can render each scene as a separate file.',
+    items: [
+      'In the export dialog, when you have more than one scene, a new option "Export each scene separately" appears.',
+      'When enabled, export produces one WebM file per scene (e.g. my-video-scene-1.webm, my-video-scene-2.webm).',
+      'Uses the same resolution, framerate, bitrate, and content (full or panel-only) as a single export.',
+    ],
+  },
+  {
+    version: '1.12.22',
+    date: '2026-02-25',
+    summary: 'Example background videos in the sidebar.',
+    items: [
+      'Below the background video slot, four small first-frame previews from public/example-assets/Background/ (1.mp4–4.mp4).',
+      'Click a preview to use that video as the project background.',
+    ],
+  },
+  {
+    version: '1.12.21',
+    date: '2026-02-25',
+    summary: 'Timeline keyframe lanes: one expanded at a time, all markers draggable.',
+    items: [
+      'Global effect and camera keyframe rows are now two lanes: click a lane to expand it (only the selected lane has extra height).',
+      'All keyframe markers (global and camera) are draggable left and right to change their time.',
+      'Dragging works in both expanded and collapsed lanes so you can move keyframes without expanding.',
+      'Click a marker without dragging to seek the playhead to that keyframe.',
+    ],
+  },
+  {
+    version: '1.12.20',
+    date: '2026-02-25',
+    summary: 'Glitch effect: choose from five algorithms.',
+    items: [
+      'New Algorithm dropdown in the Glitch effect: Sporadic, Constant mild, Constant wild, Block displacement, Noise burst.',
+      'Constant wild uses the library’s intense always-on glitch; Block and Noise are custom burst-style effects.',
+      'Block displacement shifts the image in blocks during glitch bursts; Noise burst overlays TV-static-style noise.',
+    ],
+  },
+  {
+    version: '1.12.19',
+    date: '2026-02-25',
+    summary: 'More dither algorithms for the dither effect.',
+    items: [
+      'Dither mode dropdown now includes: Bayer 2×2, 4×4, 8×8, 16×16, Random, Value noise, Halftone (dot), and Line screen.',
+      'Bayer 16×16 gives a finer ordered pattern; Value noise a smoother procedural look; Halftone and Line screen for print-style looks.',
+    ],
+  },
+  {
+    version: '1.12.18',
+    date: '2026-02-25',
+    summary: 'Preset dropdown and parameter coverage fixes.',
+    items: [
+      'On load, initial project now uses your last selected preset so the dropdown and applied look match.',
+      'Applying a preset from the dropdown now applies global effects (e.g. dither keyframes) from the preset as well.',
+      'Saving a preset strips blob URLs from pane media so saved presets stay portable.',
+    ],
+  },
+  {
+    version: '1.12.17',
+    date: '2026-02-25',
+    summary: 'Minimal icon set replaces emojis across the app.',
+    items: [
+      'Playback bar: Play, Pause, Loop, Skip to start, Skip to next scene use Lucide icons.',
+      'Timeline: Duplicate, Delete, Jump to start, and Show automation use clean icons.',
+      'Collapsible sections, modals, panels: close and expand use consistent minimal icons.',
+    ],
+  },
+  {
+    version: '1.12.16',
+    date: '2026-02-25',
+    summary: 'Floating transport bar with playback and camera controls.',
+    items: [
+      'New floating bar below the canvas: Play, Loop, Jump to scene start, and (when multiple scenes) Jump to next scene.',
+      'Camera controls in the bar: "Save camera position" (add keyframe at playhead) and "Go to first keyframe" when the scene has flyover.',
+      'Camera position (x, y, z) shown on the right side of the bar.',
+      'Play and Loop removed from the timeline; timeline keeps duplicate, delete, automation, time, and scene duration.',
+    ],
+  },
+  {
+    version: '1.12.15',
+    date: '2026-02-25',
+    summary: 'SVG panel support removed.',
+    items: [
+      'Panel layers now support only video and image (no SVG).',
+      'Simpler file pickers and drop zones: video or image only.',
+    ],
+  },
+  {
+    version: '1.12.14',
+    date: '2026-02-25',
+    summary: 'Left sidebar: empty pane drop zone and project review.',
+    items: [
+      'Layers section: when there are no layers, a prominent empty pane shows "Drag and drop to load your video or image" (or click to choose).',
+      'When you already have layers, a compact "Drop here to add another layer" card appears at the bottom so you can add by drag-and-drop without using the + menu.',
+      'New docs/PROJECT-REVIEW.md: what’s unclear, left sidebar best practices, and how to structure add pane / add text / drop zone for clarity.',
+    ],
+  },
+  {
+    version: '1.12.13',
+    date: '2026-02-25',
+    summary: 'Panel styling and number helpers consistency.',
+    items: [
+      'AssetsPanel, TextPanel, PanesPanel, FlyoverPanel, and CurrentScenePanel now use sectionHeadingClass and smallLabelClass from src/constants/ui.',
+      'CollapsibleSection uses sectionHeadingClass for its headings.',
+      'TextPanel, PanesPanel, and CurrentScenePanel use parseNum and clamp from src/utils/numbers for number inputs (font size, padding, position, duration).',
+    ],
+  },
+  {
     version: '1.12.12',
     date: '2026-02-25',
     summary: 'Play with no keyframes keeps camera position.',
@@ -242,7 +361,7 @@ export const changelogReleases: ChangelogRelease[] = [
     date: '2026-02-24',
     summary: 'Timeline automation curves for effect keyframes.',
     items: [
-      'Toggle (📈) in timeline to show or hide effect automation curves',
+      'Toggle in timeline to show or hide effect automation curves',
       'Curves appear below the video track, synced to each scene',
       'One lane per automated parameter; multiple lanes when several effects are keyframed',
       'Drag the start and end points on each curve to tweak values quickly',

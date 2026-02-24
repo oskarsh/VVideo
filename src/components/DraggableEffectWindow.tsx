@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
+import { X } from 'lucide-react'
 
 interface DraggableEffectWindowProps {
   id: string
@@ -100,7 +101,7 @@ export function DraggableEffectWindow({
           className="rounded p-1 text-white/50 hover:bg-white/10 hover:text-white/90"
           aria-label="Close"
         >
-          ✕
+          <X className="w-4 h-4" />
         </button>
       </div>
       <div className="max-h-[70vh] overflow-y-auto p-2">{children}</div>

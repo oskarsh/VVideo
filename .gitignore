@@ -25,3 +25,7 @@ npm-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Example / local assets (do not upload)
+example_assets/
+example assets/

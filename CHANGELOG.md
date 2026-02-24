@@ -1,5 +1,124 @@
 # Changelog
 
+## 1.12.24 — 2026-02-25
+
+**Text layers now appear in the Layers list.**
+
+- When you add text via the Layers + menu, it now shows up in the Layers list alongside video/image panes.
+- Each text layer shows a preview and a remove button.
+- TextPanel added to the left sidebar so you can edit text content, font, position, and mode (3D or static).
+
+---
+
+## 1.12.23 — 2026-02-25
+
+**Export can render each scene as a separate file.**
+
+- In the export dialog, when you have more than one scene, a new option "Export each scene separately" appears.
+- When enabled, export produces one WebM file per scene (e.g. my-video-scene-1.webm, my-video-scene-2.webm).
+- Uses the same resolution, framerate, bitrate, and content (full or panel-only) as a single export.
+
+---
+
+## 1.12.22 — 2026-02-25
+
+**Example background videos in the sidebar.**
+
+- Below the background video slot, four small first-frame previews from public/example-assets/Background/ (1.mp4–4.mp4).
+- Click a preview to use that video as the project background.
+
+---
+
+## 1.12.21 — 2026-02-25
+
+**Timeline keyframe lanes: one expanded at a time, all markers draggable.**
+
+- Global effect and camera keyframe rows are now two lanes: click a lane to expand it (only the selected lane has extra height).
+- All keyframe markers (global and camera) are draggable left and right to change their time.
+- Dragging works in both expanded and collapsed lanes so you can move keyframes without expanding.
+- Click a marker without dragging to seek the playhead to that keyframe.
+
+---
+
+## 1.12.20 — 2026-02-25
+
+**Glitch effect: choose from five algorithms.**
+
+- New Algorithm dropdown in the Glitch effect: Sporadic, Constant mild, Constant wild, Block displacement, Noise burst.
+- Constant wild uses the library’s intense always-on glitch; Block and Noise are custom burst-style effects.
+- Block displacement shifts the image in blocks during glitch bursts; Noise burst overlays TV-static-style noise.
+
+---
+
+## 1.12.19 — 2026-02-25
+
+**More dither algorithms for the dither effect.**
+
+- Dither mode dropdown now includes: Bayer 2×2, 4×4, 8×8, 16×16, Random, Value noise, Halftone (dot), and Line screen.
+- Bayer 16×16 gives a finer ordered pattern; Value noise a smoother procedural look; Halftone and Line screen for print-style looks.
+
+---
+
+## 1.12.18 — 2026-02-25
+
+**Preset dropdown and parameter coverage fixes.**
+
+- On load, initial project now uses your last selected preset so the dropdown and applied look match.
+- Applying a preset from the dropdown now applies global effects (e.g. dither keyframes) from the preset as well.
+- Saving a preset strips blob URLs from pane media so saved presets stay portable.
+
+---
+
+## 1.12.17 — 2026-02-25
+
+**Minimal icon set replaces emojis across the app.**
+
+- Playback bar: Play, Pause, Loop, Skip to start, Skip to next scene use Lucide icons.
+- Timeline: Duplicate, Delete, Jump to start, and Show automation use clean icons.
+- Collapsible sections, modals, panels: close and expand use consistent minimal icons.
+
+---
+
+## 1.12.16 — 2026-02-25
+
+**Floating transport bar with playback and camera controls.**
+
+- New floating bar below the canvas: Play, Loop, Jump to scene start, and (when multiple scenes) Jump to next scene.
+- Camera controls in the bar: "Save camera position" (add keyframe at playhead) and "Go to first keyframe" when the scene has flyover.
+- Camera position (x, y, z) shown on the right side of the bar.
+- Play and Loop removed from the timeline; timeline keeps duplicate, delete, automation, time, and scene duration.
+
+---
+
+## 1.12.15 — 2026-02-25
+
+**SVG panel support removed.**
+
+- Panel layers now support only video and image (no SVG).
+- Simpler file pickers and drop zones: video or image only.
+
+---
+
+## 1.12.14 — 2026-02-25
+
+**Left sidebar: empty pane drop zone and project review.**
+
+- Layers section: when there are no layers, a prominent empty pane shows "Drag and drop to load your video or image" (or click to choose).
+- When you already have layers, a compact "Drop here to add another layer" card appears at the bottom so you can add by drag-and-drop without using the + menu.
+- New docs/PROJECT-REVIEW.md: what's unclear, left sidebar best practices, and how to structure add pane / add text / drop zone for clarity.
+
+---
+
+## 1.12.13 — 2026-02-25
+
+**Panel styling and number helpers consistency.**
+
+- AssetsPanel, TextPanel, PanesPanel, FlyoverPanel, and CurrentScenePanel now use sectionHeadingClass and smallLabelClass from src/constants/ui
+- CollapsibleSection uses sectionHeadingClass for its headings
+- TextPanel, PanesPanel, and CurrentScenePanel use parseNum and clamp from src/utils/numbers for number inputs (font size, padding, position, duration)
+
+---
+
 ## 1.12.12 — 2026-02-25
 
 **Play with no keyframes keeps camera position.**

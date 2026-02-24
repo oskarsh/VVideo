@@ -1,3 +1,4 @@
+import { Play } from 'lucide-react'
 import { useStore } from '@/store'
 import { CollapsibleSection } from './CollapsibleSection'
 import {
@@ -6,9 +7,11 @@ import {
   DEFAULT_GLOBAL_KEYFRAMES,
 } from '@/lib/globalEffects'
 import type { Scene, GlobalEffectType, Project } from '@/types'
+import type { SceneEffectDither } from '@/types'
 import { getFlyoverStateAt } from '@/lib/flyover'
 import { EFFECT_DISPLAY_NAMES } from '@/lib/effectLabels'
 import { inputClass } from '@/constants/ui'
+import { DITHER_MODES } from './EffectsPanel'
 
 export const GLOBAL_EFFECT_TYPES: GlobalEffectType[] = [
   'camera',
@@ -239,7 +242,7 @@ function SliderWithKeyframe({
               const v = parseFloat(e.target.value)
               onKeyframe({ [paramKey]: v })
             }}
-            className="flex-1 min-w-0"
+            className="flex-1 min-w-0 h-2 block"
           />
           <span className="text-[10px] text-white/40 w-8 shrink-0">{format(value)}</span>
         </div>
@@ -250,7 +253,7 @@ function SliderWithKeyframe({
         className="w-6 h-6 rounded flex items-center justify-center text-[10px] text-white/50 hover:text-white hover:bg-white/10 shrink-0"
         title={title}
       >
-        ▶
+        <Play className="w-3.5 h-3.5" />
       </button>
     </div>
   )
@@ -357,11 +360,11 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                       <span className="text-[11px] text-white/50 block mb-1">Mode</span>
                       <select
                         value={(d.mode as string) ?? 'bayer4'}
-                        onChange={(e) => onKf({ mode: e.target.value as 'bayer2' | 'bayer4' | 'bayer8' | 'random' })}
+                        onChange={(e) => onKf({ mode: e.target.value as SceneEffectDither['mode'] })}
                         className={inputClass}
                       >
-                        {['bayer2', 'bayer4', 'bayer8', 'random'].map((v) => (
-                          <option key={v} value={v} className="bg-zinc-900">{v}</option>
+                        {DITHER_MODES.map(({ value, label }) => (
+                          <option key={value} value={value} className="bg-zinc-900">{label}</option>
                         ))}
                       </select>
                     </div>

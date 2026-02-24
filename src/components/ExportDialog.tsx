@@ -19,6 +19,9 @@ export function ExportDialog({
   content,
   setContent,
   hasPlaneMedia,
+  exportPerScene,
+  setExportPerScene,
+  sceneCount,
   onClose,
   onExport,
 }: {
@@ -34,6 +37,9 @@ export function ExportDialog({
   content: 'full' | 'plane-only'
   setContent: (c: 'full' | 'plane-only') => void
   hasPlaneMedia: boolean
+  exportPerScene: boolean
+  setExportPerScene: (v: boolean) => void
+  sceneCount: number
   onClose: () => void
   onExport: () => void
 }) {
@@ -162,12 +168,28 @@ export function ExportDialog({
                 <p className="text-xs text-white/50 mt-0.5">
                   {hasPlaneMedia
                     ? 'Panel + effects, transparent background (WebM with alpha)'
-                    : 'Add a panel video, image or SVG in the sidebar to use this'}
+                    : 'Add a panel video or image in the sidebar to use this'}
                 </p>
               </div>
             </label>
           </div>
         </div>
+        {sceneCount > 1 && (
+          <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10">
+            <input
+              type="checkbox"
+              checked={exportPerScene}
+              onChange={(e) => setExportPerScene(e.target.checked)}
+              className="rounded text-white"
+            />
+            <div>
+              <span className="text-sm font-medium text-white">Export each scene separately</span>
+              <p className="text-xs text-white/50 mt-0.5">
+                Saves one file per scene (e.g. my-video-scene-1.webm, my-video-scene-2.webm).
+              </p>
+            </div>
+          </label>
+        )}
       </div>
       <div className="flex gap-2 mt-6">
         <button

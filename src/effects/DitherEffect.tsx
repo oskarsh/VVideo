@@ -49,8 +49,51 @@ const DitherShader = {
       return float(v) / 64.0;
     }
 
+    // Bayer 16x16 recursive
+    float bayer16(ivec2 p) {
+      int x = p.x & 15, y = p.y & 15;
+      int v0 = (x & 1) + (y & 1) * 2;
+      v0 = (v0 == 0) ? 0 : (v0 == 1) ? 2 : (v0 == 2) ? 3 : 1;
+      int v1 = ((x >> 1) & 1) + ((y >> 1) & 1) * 2;
+      v1 = (v1 == 0) ? 0 : (v1 == 1) ? 2 : (v1 == 2) ? 3 : 1;
+      int v2 = ((x >> 2) & 1) + ((y >> 2) & 1) * 2;
+      v2 = (v2 == 0) ? 0 : (v2 == 1) ? 2 : (v2 == 2) ? 3 : 1;
+      int v3 = ((x >> 3) & 1) + ((y >> 3) & 1) * 2;
+      v3 = (v3 == 0) ? 0 : (v3 == 1) ? 2 : (v3 == 2) ? 3 : 1;
+      int v = v0 + v1 * 4 + v2 * 16 + v3 * 64;
+      return float(v) / 256.0;
+    }
+
     float random(vec2 uv) {
       return fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
+    }
+
+    // Value noise (smooth procedural noise)
+    float valueNoise(vec2 uv) {
+      vec2 i = floor(uv);
+      vec2 f = fract(uv);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = random(i);
+      float b = random(i + vec2(1.0, 0.0));
+      float c = random(i + vec2(0.0, 1.0));
+      float d = random(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+
+    // Halftone (dot screen): circular dot threshold per cell
+    float halftone(ivec2 p, vec2 resolution) {
+      float cell = 8.0;
+      vec2 uv = (vec2(p) + 0.5) / resolution;
+      vec2 grid = floor(uv * cell) / cell;
+      vec2 cellCenter = grid + 0.5 / cell;
+      vec2 inCell = (uv - cellCenter) * cell;
+      float d = length(inCell);
+      return clamp(d * d, 0.0, 1.0);
+    }
+
+    // Line screen: parallel lines
+    float lines(vec2 uv) {
+      return fract(uv.y * 12.0);
     }
 
     void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
@@ -59,7 +102,12 @@ const DitherShader = {
       if (mode == 0) threshold = bayer2(px);
       else if (mode == 1) threshold = bayer4(px);
       else if (mode == 2) threshold = bayer8(px);
-      else threshold = random(uv * resolution);
+      else if (mode == 3) threshold = random(uv * resolution);
+      else if (mode == 4) threshold = bayer16(px);
+      else if (mode == 5) threshold = valueNoise(uv * resolution * 0.1);
+      else if (mode == 6) threshold = halftone(px, resolution);
+      else if (mode == 7) threshold = lines(uv);
+      else threshold = bayer4(px);
       threshold = clamp(threshold + thresholdBias, 0.0, 1.0);
 
       float L = max(levels, 2.0);

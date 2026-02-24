@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
+import { Copy, X, SkipBack, TrendingUp } from 'lucide-react'
 import { useStore } from '@/store'
 import type { Scene, GlobalEffectType } from '@/types'
 import { getFlyoverKeyframes } from '@/lib/flyover'
@@ -249,6 +250,10 @@ function getSceneAutomationCurves(scene: Scene, sceneIndex: number): AutomationC
 const AUTOMATION_LANE_HEIGHT = 28
 const AUTOMATION_LANE_HEIGHT_COLLAPSED = 20
 const AUTOMATION_LANE_HEIGHT_EXPANDED = 120
+/** Keyframe marker lanes: collapsed height (all lanes), expanded (selected lane only). */
+const KEYFRAME_LANE_HEIGHT_COLLAPSED = 24
+const KEYFRAME_LANE_HEIGHT_EXPANDED = 80
+const KEYFRAME_DRAG_TIME_EPS = 0.001
 const AUTOMATION_CURVE_COLORS = [
   'rgb(34, 211, 238)',   // cyan
   'rgb(251, 191, 36)',   // amber
@@ -269,9 +274,6 @@ export function Timeline() {
   const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
   const setCurrentTime = useStore((s) => s.setCurrentTime)
   const setPlaying = useStore((s) => s.setPlaying)
-  const isPlaying = useStore((s) => s.isPlaying)
-  const loopCurrentScene = useStore((s) => s.loopCurrentScene)
-  const setLoopCurrentScene = useStore((s) => s.setLoopCurrentScene)
   const addScene = useStore((s) => s.addScene)
   const removeScene = useStore((s) => s.removeScene)
   const duplicateScene = useStore((s) => s.duplicateScene)
@@ -282,6 +284,8 @@ export function Timeline() {
   const updateScene = useStore((s) => s.updateScene)
   const projectFps = useStore((s) => s.projectFps)
   const setProjectFps = useStore((s) => s.setProjectFps)
+  const updateGlobalEffectKeyframe = useStore((s) => s.updateGlobalEffectKeyframe)
+  const updateFlyoverKeyframe = useStore((s) => s.updateFlyoverKeyframe)
 
   const [automationDrag, setAutomationDrag] = useState<{
     curve: AutomationCurve
@@ -291,12 +295,23 @@ export function Timeline() {
 
   const [expandedAutomationLane, setExpandedAutomationLane] = useState<number | null>(null)
 
+  /** Which keyframe lane is expanded (global effect markers vs camera markers). Click lane to select. */
+  const [expandedKeyframeLane, setExpandedKeyframeLane] = useState<'global' | 'camera' | null>(null)
+
+  /** Dragging a keyframe horizontally to change its time. initialTime = project time for seek-on-click. */
+  const [keyframeDrag, setKeyframeDrag] = useState<
+    | { kind: 'global'; effectType: GlobalEffectType; keyframeTime: number; initialTime: number; trackRect: DOMRect; hasMoved?: boolean }
+    | { kind: 'camera'; sceneIndex: number; keyframeTime: number; initialTime: number; trackRect: DOMRect; hasMoved?: boolean }
+    | null
+  >(null)
+
   const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
   const sceneStarts = project.scenes.reduce<number[]>(
     (acc, s, i) => [...acc, acc[i] + s.durationSeconds],
     [0]
   )
   const trackRef = useRef<HTMLDivElement>(null)
+  const keyframeTrackRef = useRef<HTMLDivElement>(null)
 
   const handleScrub = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -371,6 +386,46 @@ export function Timeline() {
     }
   }, [automationDrag, setEffect])
 
+  // Global mouse move/up for keyframe time drag (horizontal); click-without-drag seeks to keyframe
+  useEffect(() => {
+    if (!keyframeDrag || !keyframeTrackRef.current) return
+    const trackRect = keyframeDrag.trackRect
+    const onMove = (e: MouseEvent) => {
+      const x = (e.clientX - trackRect.left) / trackRect.width
+      const time = Math.max(0, Math.min(totalDuration, x * totalDuration))
+      if (keyframeDrag.kind === 'global') {
+        const track = project.globalEffects?.[keyframeDrag.effectType]
+        const keyframes = track?.keyframes ?? []
+        const idx = keyframes.findIndex((k) => Math.abs(k.time - keyframeDrag.keyframeTime) < KEYFRAME_DRAG_TIME_EPS)
+        if (idx >= 0) updateGlobalEffectKeyframe(keyframeDrag.effectType, idx, { time })
+        setKeyframeDrag((prev) => (prev && prev.kind === 'global' ? { ...prev, keyframeTime: time, hasMoved: true } : prev))
+      } else {
+        const scene = project.scenes[keyframeDrag.sceneIndex]
+        const duration = scene?.durationSeconds ?? 1
+        const sceneStart = sceneStarts[keyframeDrag.sceneIndex] ?? 0
+        const localTime = time - sceneStart
+        const normalized = Math.max(0, Math.min(1, localTime / duration))
+        const keyframes = scene?.flyover?.keyframes ?? []
+        const idx = keyframes.findIndex((k) => Math.abs(k.time - keyframeDrag.keyframeTime) < KEYFRAME_DRAG_TIME_EPS)
+        if (idx >= 0) updateFlyoverKeyframe(keyframeDrag.sceneIndex, idx, { time: normalized })
+        setKeyframeDrag((prev) => (prev && prev.kind === 'camera' ? { ...prev, keyframeTime: normalized, hasMoved: true } : prev))
+      }
+    }
+    const onUp = () => {
+      if (keyframeDrag && !keyframeDrag.hasMoved) {
+        setCurrentTime(keyframeDrag.initialTime)
+        if (keyframeDrag.kind === 'camera') setCurrentSceneIndex(keyframeDrag.sceneIndex)
+      }
+      setKeyframeDrag(null)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [keyframeDrag, totalDuration, sceneStarts, project.scenes, project.globalEffects, updateGlobalEffectKeyframe, updateFlyoverKeyframe, setCurrentTime, setCurrentSceneIndex])
+
   const curvesPerScene = project.scenes.map((sc, i) => getSceneAutomationCurves(sc, i))
   const maxLanes = Math.max(1, ...curvesPerScene.map((c) => c.length))
   const laneHeights = Array.from({ length: maxLanes }, (_, i) =>
@@ -437,26 +492,11 @@ export function Timeline() {
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-white/10 min-w-0">
         <button
           type="button"
-          onClick={() => setPlaying(!isPlaying)}
-          className="w-8 h-8 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm"
-        >
-          {isPlaying ? '⏸' : '▶'}
-        </button>
-        <button
-          type="button"
-          onClick={() => setLoopCurrentScene(!loopCurrentScene)}
-          className={`w-8 h-8 rounded flex items-center justify-center text-sm ${loopCurrentScene ? 'bg-white/20 text-white' : 'bg-white/10 hover:bg-white/20 text-white/60'}`}
-          title={loopCurrentScene ? 'Loop current scene (on)' : 'Loop current scene (off)'}
-        >
-          🔁
-        </button>
-        <button
-          type="button"
           onClick={handleDuplicate}
           className="w-8 h-8 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm"
           title="Duplicate current scene"
         >
-          ⧉
+          <Copy className="w-4 h-4" />
         </button>
         <button
           type="button"
@@ -465,7 +505,7 @@ export function Timeline() {
           className="w-8 h-8 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm text-red-400/90 disabled:opacity-50 disabled:pointer-events-none"
           title="Delete current scene"
         >
-          ✕
+          <X className="w-4 h-4" />
         </button>
         <button
           type="button"
@@ -476,7 +516,7 @@ export function Timeline() {
           className="w-8 h-8 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm"
           title="Jump to start of current scene"
         >
-          ⏮
+          <SkipBack className="w-4 h-4" />
         </button>
         <button
           type="button"
@@ -484,7 +524,7 @@ export function Timeline() {
           className={`w-8 h-8 rounded flex items-center justify-center text-sm ${timelineShowAutomation ? 'bg-white/20 text-white' : 'bg-white/10 hover:bg-white/20 text-white/60'}`}
           title={timelineShowAutomation ? 'Hide effect automation curves' : 'Show effect automation curves'}
         >
-          📈
+          <TrendingUp className="w-4 h-4" />
         </button>
         <span className="text-xs text-white/60 tabular-nums ml-1" title={`${formatTime(currentTime)} / ${formatTime(totalDuration)}`}>
           Frame {currentFrame} / {totalFrames}
@@ -562,7 +602,7 @@ export function Timeline() {
 
       {/* Track: clips + add; optional automation row below */}
       <div className="px-2 py-2 flex items-stretch gap-2 bg-zinc-800/60">
-        <div className="flex-1 min-w-0 flex flex-col gap-2">
+        <div ref={keyframeTrackRef} className="flex-1 min-w-0 flex flex-col gap-2">
           <div
             ref={trackRef}
             className="h-16 rounded-lg cursor-pointer relative bg-zinc-900/80"
@@ -641,55 +681,96 @@ export function Timeline() {
             />
           </div>
 
-          {/* Global effect keyframe markers */}
+          {/* Keyframe lanes: one for global effects, one for camera. Click lane to expand; only expanded lane has more height. All markers draggable left/right. */}
           {hasGlobalKeyframes && (
             <div
-              className="h-6 rounded bg-zinc-900/70 border border-white/5 cursor-pointer relative flex items-center"
-              onClick={handleScrub}
-              title="Global effect keyframes — click to seek"
+              role="button"
+              tabIndex={0}
+              className={`rounded border border-white/5 relative flex items-center transition-all duration-200 cursor-pointer ${expandedKeyframeLane === 'global' ? 'ring-1 ring-cyan-400/50 z-10' : ''}`}
+              style={{ minHeight: expandedKeyframeLane === 'global' ? KEYFRAME_LANE_HEIGHT_EXPANDED : KEYFRAME_LANE_HEIGHT_COLLAPSED }}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('[data-keyframe-marker]')) return
+                e.stopPropagation()
+                setExpandedKeyframeLane((prev) => (prev === 'global' ? null : 'global'))
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setExpandedKeyframeLane((prev) => (prev === 'global' ? null : 'global'))
+                }
+              }}
+              title={expandedKeyframeLane === 'global' ? 'Global effect keyframes — click lane to collapse; drag markers to move' : 'Global effect keyframes — click to expand; drag markers to move time'}
             >
-              {globalKeyframeMarkers.map(({ time, type }, idx) => (
-                <button
-                  key={`${type}-${time}-${idx}`}
-                  type="button"
-                  className="absolute w-2 h-2 rounded-full bg-cyan-500/90 hover:bg-cyan-400 hover:scale-125 z-10 border border-white/30 -translate-x-1/2"
-                  style={{ left: `${(time / totalDuration) * 100}%` }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setCurrentTime(time)
-                    const i = sceneStarts.findIndex((start, j) => {
-                      const end = sceneStarts[j + 1] ?? totalDuration
-                      return time >= start && time < end
-                    })
-                    if (i >= 0) setCurrentSceneIndex(i)
-                  }}
-                  title={`${globalEffectLabel[type]} @ ${formatTime(time)}`}
-                />
-              ))}
+              <div className="absolute inset-0 bg-zinc-900/70 rounded pointer-events-none" aria-hidden />
+              {globalKeyframeMarkers.map(({ time, type }, idx) => {
+                const track = project.globalEffects?.[type]
+                const kfIndex = track?.keyframes.findIndex((k) => Math.abs(k.time - time) < KEYFRAME_DRAG_TIME_EPS) ?? -1
+                return (
+                  <button
+                    key={`${type}-${time}-${idx}`}
+                    type="button"
+                    data-keyframe-marker
+                    className="absolute w-2 h-2 rounded-full bg-cyan-500/90 hover:bg-cyan-400 hover:scale-125 z-10 border border-white/30 -translate-x-1/2 cursor-grab active:cursor-grabbing"
+                    style={{ left: `${(time / totalDuration) * 100}%` }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (kfIndex < 0) return
+                      const rect = keyframeTrackRef.current?.getBoundingClientRect()
+                      if (rect) setKeyframeDrag({ kind: 'global', effectType: type, keyframeTime: time, initialTime: time, trackRect: rect })
+                    }}
+                    title={`${globalEffectLabel[type]} @ ${formatTime(time)} — drag to move`}
+                  />
+                )
+              })}
             </div>
           )}
 
-          {/* Per-scene camera (flyover) keyframe markers */}
           {hasCameraKeyframes && (
             <div
-              className="h-6 rounded bg-zinc-900/70 border border-white/5 cursor-pointer relative flex items-center"
-              onClick={handleScrub}
-              title="Scene camera keyframes — click to seek"
+              role="button"
+              tabIndex={0}
+              className={`rounded border border-white/5 relative flex items-center transition-all duration-200 cursor-pointer ${expandedKeyframeLane === 'camera' ? 'ring-1 ring-amber-400/50 z-10' : ''}`}
+              style={{ minHeight: expandedKeyframeLane === 'camera' ? KEYFRAME_LANE_HEIGHT_EXPANDED : KEYFRAME_LANE_HEIGHT_COLLAPSED }}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('[data-keyframe-marker]')) return
+                e.stopPropagation()
+                setExpandedKeyframeLane((prev) => (prev === 'camera' ? null : 'camera'))
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setExpandedKeyframeLane((prev) => (prev === 'camera' ? null : 'camera'))
+                }
+              }}
+              title={expandedKeyframeLane === 'camera' ? 'Camera keyframes — click lane to collapse; drag markers to move' : 'Camera keyframes — click to expand; drag markers to move time'}
             >
-              {cameraKeyframeMarkers.map(({ time, sceneIndex }, idx) => (
-                <button
-                  key={`cam-${sceneIndex}-${time}-${idx}`}
-                  type="button"
-                  className="absolute w-2 h-2 rounded-full bg-amber-400/90 hover:bg-amber-300 hover:scale-125 z-10 border border-white/30 -translate-x-1/2"
-                  style={{ left: `${(time / totalDuration) * 100}%` }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setCurrentTime(time)
-                    setCurrentSceneIndex(sceneIndex)
-                  }}
-                  title={`Camera @ ${formatTime(time)}`}
-                />
-              ))}
+              <div className="absolute inset-0 bg-zinc-900/70 rounded pointer-events-none" aria-hidden />
+              {cameraKeyframeMarkers.map(({ time: projectTime, sceneIndex }, idx) => {
+                const scene = project.scenes[sceneIndex]
+                const duration = scene?.durationSeconds ?? 1
+                const sceneStart = sceneStarts[sceneIndex] ?? 0
+                const normalizedTime = (projectTime - sceneStart) / duration
+                const kfs = scene?.flyover?.keyframes ?? []
+                const kfIndex = kfs.findIndex((k) => Math.abs(k.time - normalizedTime) < KEYFRAME_DRAG_TIME_EPS)
+                return (
+                  <button
+                    key={`cam-${sceneIndex}-${projectTime}-${idx}`}
+                    type="button"
+                    data-keyframe-marker
+                    className="absolute w-2 h-2 rounded-full bg-amber-400/90 hover:bg-amber-300 hover:scale-125 z-10 border border-white/30 -translate-x-1/2 cursor-grab active:cursor-grabbing"
+                    style={{ left: `${(projectTime / totalDuration) * 100}%` }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (kfIndex < 0) return
+                      const rect = keyframeTrackRef.current?.getBoundingClientRect()
+                      if (rect) setKeyframeDrag({ kind: 'camera', sceneIndex, keyframeTime: normalizedTime, initialTime: projectTime, trackRect: rect })
+                    }}
+                    title={`Camera @ ${formatTime(projectTime)} — drag to move`}
+                  />
+                )
+              })}
             </div>
           )}
 

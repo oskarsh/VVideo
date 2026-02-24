@@ -1,14 +1,105 @@
 import { useRef, useState, useEffect } from 'react'
+import { X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useStore } from '@/store'
 import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
 import { parseNum, clamp } from '@/utils/numbers'
-import type { Pane, PlaneMedia } from '@/types'
+import type { Pane, PlaneMedia, SceneText } from '@/types'
 
-function getMediaTypeFromFile(file: File): 'video' | 'image' | 'svg' {
+function getMediaTypeFromFile(file: File): 'video' | 'image' {
   if (file.type.startsWith('video/')) return 'video'
-  if (file.type === 'image/svg+xml' || file.name?.toLowerCase().endsWith('.svg')) return 'svg'
   if (file.type.startsWith('image/')) return 'image'
   return 'image'
+}
+
+function isAcceptableFile(file: File): boolean {
+  return (
+    file.type.startsWith('video/') ||
+    file.type.startsWith('image/')
+  )
+}
+
+function fileToPlaneMedia(file: File): PlaneMedia {
+  const url = URL.createObjectURL(file)
+  const type = getMediaTypeFromFile(file)
+  return type === 'video' ? { type: 'video', url } : { type: 'image', url }
+}
+
+function EmptyPaneDropZone({
+  compact = false,
+  onDrop,
+}: {
+  compact?: boolean
+  onDrop: (media: PlaneMedia) => void
+}) {
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer?.types.includes('Files')) return
+    const item = e.dataTransfer.items?.[0]
+    if (item?.kind !== 'file') return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    const related = e.relatedTarget as Node | null
+    if (e.currentTarget.contains(related)) return
+    setIsDragOver(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (!file || !isAcceptableFile(file)) return
+    onDrop(fileToPlaneMedia(file))
+  }
+
+  const handleClick = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'video/*,image/*'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (file && isAcceptableFile(file)) onDrop(fileToPlaneMedia(file))
+    }
+    input.click()
+  }
+
+  if (compact) {
+    return (
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={handleClick}
+        className={`rounded-lg border border-dashed p-3 text-center cursor-pointer transition-colors ${isDragOver
+          ? 'border-white/30 bg-white/15 text-white/90'
+          : 'border-white/20 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/60'
+          }`}
+      >
+        <span className="text-xs">Drop here to add another layer</span>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      onClick={handleClick}
+      className={`rounded-lg border border-dashed p-6 text-center cursor-pointer transition-colors ${isDragOver
+        ? 'border-white/30 bg-white/15 text-white/90'
+        : 'border-white/20 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/60'
+        }`}
+    >
+      <span className="text-3xl opacity-60 block mb-2">▢</span>
+      <p className="text-sm font-medium text-white/80 mb-1">Drag and drop to load your video or image</p>
+      <p className="text-xs text-white/50">or click to choose a file</p>
+    </div>
+  )
 }
 
 function SliderRow({
@@ -51,11 +142,15 @@ export function PanesPanel() {
   const project = useStore((s) => s.project)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const addPane = useStore((s) => s.addPane)
+  const addPaneWithMedia = useStore((s) => s.addPaneWithMedia)
   const addSceneText = useStore((s) => s.addSceneText)
   const removePane = useStore((s) => s.removePane)
   const updatePane = useStore((s) => s.updatePane)
   const reorderPanes = useStore((s) => s.reorderPanes)
+  const updateScene = useStore((s) => s.updateScene)
   const panes = project.panes ?? []
+  const scene = project.scenes[currentSceneIndex]
+  const texts: SceneText[] = scene?.texts ?? []
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -79,12 +174,19 @@ export function PanesPanel() {
     addSceneText(currentSceneIndex)
   }
 
+  const removeText = (id: string) => {
+    if (!scene) return
+    updateScene(currentSceneIndex, {
+      texts: (scene.texts ?? []).filter((t) => t.id !== id),
+    })
+  }
+
   const handlePaneFile = (paneId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const url = URL.createObjectURL(file)
     const type = getMediaTypeFromFile(file)
-    const media: PlaneMedia = type === 'video' ? { type: 'video', url } : type === 'svg' ? { type: 'svg', url } : { type: 'image', url }
+    const media: PlaneMedia = type === 'video' ? { type: 'video', url } : { type: 'image', url }
     updatePane(paneId, { media })
     e.target.value = ''
   }
@@ -129,10 +231,10 @@ export function PanesPanel() {
         </div>
       </div>
       <p className="text-xs text-white/50 mb-2">
-        Multiple video/image/SVG layers. Z-order: lower index = behind. Enable animation to animate over the scene.
+        Multiple video/image layers. Z-order: lower index = behind. Enable animation to animate over the scene.
       </p>
-      {panes.length === 0 ? (
-        <p className="text-xs text-white/40 italic">No layers. Add one below.</p>
+      {panes.length === 0 && texts.length === 0 ? (
+        <EmptyPaneDropZone onDrop={addPaneWithMedia} />
       ) : (
         <div className="space-y-3">
           {panes.map((pane, index) => (
@@ -149,9 +251,52 @@ export function PanesPanel() {
               onFileChange={(e) => handlePaneFile(pane.id, e)}
             />
           ))}
+          {texts.map((text, index) => (
+            <TextLayerItem
+              key={text.id}
+              text={text}
+              index={panes.length + index}
+              onRemove={() => removeText(text.id)}
+            />
+          ))}
+          <EmptyPaneDropZone compact onDrop={addPaneWithMedia} />
         </div>
       )}
     </section>
+  )
+}
+
+function TextLayerItem({
+  text,
+  index,
+  onRemove,
+}: {
+  text: SceneText
+  index: number
+  onRemove: () => void
+}) {
+  const preview = (text.content || 'Text').trim().slice(0, 24)
+  const modeLabel = text.mode === '3d' ? '3D' : 'Static'
+  return (
+    <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-white/70">
+          Text {index + 1}
+          <span className="ml-1.5 text-white/50 font-normal">({modeLabel})</span>
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1 rounded text-white/50 hover:text-red-400 hover:bg-white/10"
+          title="Remove text"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="text-xs text-white/60 truncate mt-1" title={text.content || 'Text'}>
+        {preview || 'Text'}
+      </p>
+    </div>
   )
 }
 
@@ -184,12 +329,12 @@ function PaneItem({
         <span className="text-xs font-medium text-white/70">Pane {index + 1}</span>
         <div className="flex items-center gap-0.5">
           {onMoveUp && (
-            <button type="button" onClick={onMoveUp} className="p-1 rounded text-white/50 hover:bg-white/10" title="Move back">↑</button>
+            <button type="button" onClick={onMoveUp} className="p-1 rounded text-white/50 hover:bg-white/10" title="Move back"><ChevronUp className="w-4 h-4" /></button>
           )}
           {onMoveDown && (
-            <button type="button" onClick={onMoveDown} className="p-1 rounded text-white/50 hover:bg-white/10" title="Move forward">↓</button>
+            <button type="button" onClick={onMoveDown} className="p-1 rounded text-white/50 hover:bg-white/10" title="Move forward"><ChevronDown className="w-4 h-4" /></button>
           )}
-          <button type="button" onClick={onRemove} className="p-1 rounded text-white/50 hover:text-red-400 hover:bg-white/10">✕</button>
+          <button type="button" onClick={onRemove} className="p-1 rounded text-white/50 hover:text-red-400 hover:bg-white/10"><X className="w-4 h-4" /></button>
         </div>
       </div>
       <div>
@@ -199,7 +344,7 @@ function PaneItem({
       <input
         ref={fileInputRef}
         type="file"
-        accept="video/*,image/*,image/svg+xml,.svg"
+        accept="video/*,image/*"
         onChange={onFileChange}
         className="hidden"
       />
@@ -210,7 +355,7 @@ function PaneItem({
           onClick={onSelectFile}
           className="w-full rounded px-2 py-1.5 bg-white/10 border border-white/20 text-white text-xs hover:bg-white/15"
         >
-          {pane.media?.url ? `${pane.media.type} (change)` : 'Select video, image or SVG'}
+          {pane.media?.url ? `${pane.media.type} (change)` : 'Select video or image'}
         </button>
       </div>
       <SliderRow
@@ -272,18 +417,6 @@ function PaneItem({
         format={(v) => v.toFixed(2)}
         onChange={(v) => onUpdate({ extrusionDepth: v })}
       />
-      {pane.media?.type === 'svg' && (
-        <div>
-        <span className={smallLabelClass}>SVG color</span>
-          <input
-            type="text"
-            value={pane.planeSvgColor ?? ''}
-            placeholder="#ffffff"
-            onChange={(e) => onUpdate({ planeSvgColor: e.target.value.trim() || null })}
-            className="w-full rounded px-2 py-1 bg-white/10 border border-white/20 text-white text-xs"
-          />
-        </div>
-      )}
       <div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input

@@ -56,8 +56,10 @@ Prefer **one** of the two label styles (section vs small label) per context; don
 - **Section spacing**: `space-y-4` or `space-y-6` between major sections; `space-y-2` or `space-y-3` inside a card.
 - **Card padding**: `p-3` for standard cards/panels.
 - **Gaps**: `gap-2`, `gap-3` for flex/grid; `gap-1` for tight groups (e.g. icon + text).
-- **Sidebar width**: `w-72` for left and right sidebars.
-- **Header**: `px-4 py-2`; `border-b border-white/10` for the bar under the header.
+- **Sidebar width**: Responsive (small-desktop first, not mobile). Left/right sidebars: `w-56 lg:w-64 xl:w-72` (224px → 256px → 288px). Use the same pattern for any new sidebar-like panels.
+- **Header**: `px-3 py-2 lg:px-4`; `border-b border-white/10` for the bar under the header.
+
+**Responsive (small desktop, not mobile):** Layout targets viewports from ~1024px up. Breakpoints: default (small desktop), `lg` (1024px), `xl` (1280px). Sidebars and main padding scale down below `xl` so the canvas keeps usable space. No `sm`/`md` mobile layout.
 
 ---
 

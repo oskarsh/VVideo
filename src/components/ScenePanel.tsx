@@ -1,61 +1,57 @@
 import { useStore } from '@/store'
 import { VideoThumbnail } from './VideoThumbnail'
 import { getPlaneMedia } from '@/types'
-  import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
-  import { parseNum, clamp } from '@/utils/numbers'
+import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
+import { parseNum, clamp } from '@/utils/numbers'
 
-  function getPlaneMediaTypeFromFile(file: File): 'video' | 'image' | 'svg' {
-    if (file.type.startsWith('video/')) return 'video'
-    if (file.type === 'image/svg+xml' || file.name?.toLowerCase().endsWith('.svg')) return 'svg'
-    if (file.type.startsWith('image/')) return 'image'
-    return 'image'
+function getPlaneMediaTypeFromFile(file: File): 'video' | 'image' {
+  if (file.type.startsWith('video/')) return 'video'
+  if (file.type.startsWith('image/')) return 'image'
+  return 'image'
   }
 
-  export function ScenePanel() {
-    const project = useStore((s) => s.project)
-    const currentSceneIndex = useStore((s) => s.currentSceneIndex)
-    const clearScene = useStore((s) => s.clearScene)
-    const setTrimEditorOpen = useStore((s) => s.setTrimEditorOpen)
-    const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
-    const setProjectBackgroundVideoContinuous = useStore((s) => s.setProjectBackgroundVideoContinuous)
-    const setProjectPlaneMedia = useStore((s) => s.setProjectPlaneMedia)
-    const setProjectPlaneExtrusionDepth = useStore((s) => s.setProjectPlaneExtrusionDepth)
-    const setProjectPlaneSvgColor = useStore((s) => s.setProjectPlaneSvgColor)
-    const setBackgroundTrim = useStore((s) => s.setBackgroundTrim)
-    const setPlaneTrim = useStore((s) => s.setPlaneTrim)
-    const setProjectAspectRatio = useStore((s) => s.setProjectAspectRatio)
-    const updateScene = useStore((s) => s.updateScene)
+export function ScenePanel() {
+  const project = useStore((s) => s.project)
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const clearScene = useStore((s) => s.clearScene)
+  const setTrimEditorOpen = useStore((s) => s.setTrimEditorOpen)
+  const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
+  const setProjectBackgroundVideoContinuous = useStore((s) => s.setProjectBackgroundVideoContinuous)
+  const setProjectPlaneMedia = useStore((s) => s.setProjectPlaneMedia)
+  const setProjectPlaneExtrusionDepth = useStore((s) => s.setProjectPlaneExtrusionDepth)
+  const setBackgroundTrim = useStore((s) => s.setBackgroundTrim)
+  const setPlaneTrim = useStore((s) => s.setPlaneTrim)
+  const setProjectAspectRatio = useStore((s) => s.setProjectAspectRatio)
+  const updateScene = useStore((s) => s.updateScene)
 
-    const scene = project.scenes[currentSceneIndex]
-    const aspectRatio = project.aspectRatio
-    const is16x9 = aspectRatio[0] === 16 && aspectRatio[1] === 9
-    const is9x16 = aspectRatio[0] === 9 && aspectRatio[1] === 16
-    const planeMedia = getPlaneMedia(project)
-    const planeIsVideo = planeMedia?.type === 'video'
+  const scene = project.scenes[currentSceneIndex]
+  const aspectRatio = project.aspectRatio
+  const is16x9 = aspectRatio[0] === 16 && aspectRatio[1] === 9
+  const is9x16 = aspectRatio[0] === 9 && aspectRatio[1] === 16
+  const planeMedia = getPlaneMedia(project)
+  const planeIsVideo = planeMedia?.type === 'video'
 
-    const handleFile = (
-      e: React.ChangeEvent<HTMLInputElement>,
-      type: 'background' | 'plane'
-    ) => {
-      const file = e.target.files?.[0]
-      if (!file) return
-      const url = URL.createObjectURL(file)
-      if (type === 'background') {
-        setProjectBackgroundVideo(url)
-        setBackgroundTrim(currentSceneIndex, null)
-      } else {
-        const mediaType = getPlaneMediaTypeFromFile(file)
-        setProjectPlaneMedia(
-          mediaType === 'video'
-            ? { type: 'video', url }
-            : mediaType === 'svg'
-              ? { type: 'svg', url }
-              : { type: 'image', url }
-        )
-        if (mediaType === 'video') setPlaneTrim(currentSceneIndex, null)
-      }
-      e.target.value = ''
+  const handleFile = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'background' | 'plane'
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    if (type === 'background') {
+      setProjectBackgroundVideo(url)
+      setBackgroundTrim(currentSceneIndex, null)
+    } else {
+      const mediaType = getPlaneMediaTypeFromFile(file)
+      setProjectPlaneMedia(
+        mediaType === 'video'
+          ? { type: 'video', url }
+          : { type: 'image', url }
+      )
+      if (mediaType === 'video') setPlaneTrim(currentSceneIndex, null)
     }
+    e.target.value = ''
+  }
 
     const handleClearScene = () => {
       if (window.confirm('Clear this scene? Resets trim, text, and effects for this scene.')) {
@@ -151,7 +147,7 @@ import { getPlaneMedia } from '@/types'
                   )}
                   <input
                     type="file"
-                    accept="video/*,image/*,image/svg+xml,.svg"
+                    accept="video/*,image/*"
                     onChange={(e) => handleFile(e, 'plane')}
                     className="block w-full text-sm text-white/80 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white/10 file:text-white"
                   />
@@ -172,58 +168,16 @@ import { getPlaneMedia } from '@/types'
                       {(project.planeExtrusionDepth ?? 0).toFixed(2)}
                     </span>
                   </label>
-                  {planeMedia.type === 'svg' && (
-                    <label className="block text-xs text-white/60">
-                      Color
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <input
-                          type="color"
-                          value={project.planeSvgColor ?? '#ffffff'}
-                          onChange={(e) =>
-                            setProjectPlaneSvgColor(e.target.value)
-                          }
-                          className="w-8 h-6 rounded border border-white/20 cursor-pointer bg-transparent"
-                        />
-                        <input
-                          type="text"
-                          value={project.planeSvgColor ?? ''}
-                          placeholder="SVG colors"
-                          onChange={(e) => {
-                            const v = e.target.value.trim()
-                            setProjectPlaneSvgColor(v === '' ? null : v)
-                          }}
-                          className="flex-1 min-w-0 px-1.5 py-1 rounded bg-black/30 border border-white/10 text-white/90 text-xs font-mono"
-                        />
-                        {project.planeSvgColor != null && project.planeSvgColor !== '' && (
-                          <button
-                            type="button"
-                            onClick={() => setProjectPlaneSvgColor(null)}
-                            className="text-xs text-white/50 hover:text-white shrink-0"
-                            title="Use SVG's own colors"
-                          >
-                            Reset
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setProjectPlaneMedia(null)}
-                          className="text-xs text-white/50 hover:text-white"
-                        >
-                          Remove panel
-                        </button>
-                      </div>
-                    </label>
-                  )}
                 </div>
               ) : (
                 <>
                   <input
                     type="file"
-                    accept="video/*,image/*,image/svg+xml,.svg"
+                    accept="video/*,image/*"
                     onChange={(e) => handleFile(e, 'plane')}
                     className="block w-full text-sm text-white/80 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white/10 file:text-white"
                   />
-                  <p className="text-xs text-white/40 mt-1">Video, image or SVG</p>
+                  <p className="text-xs text-white/40 mt-1">Video or image</p>
                 </>
               )}
             </div>
@@ -291,139 +245,140 @@ import { getPlaneMedia } from '@/types'
                   />
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs">
-                    Trim start (s)
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={scene.backgroundTrim?.start ?? ''}
-                      placeholder="0"
-                      onChange={(e) => {
+                <label className="text-xs">
+                  Trim start (s)
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={scene.backgroundTrim?.start ?? ''}
+                    placeholder="0"
+                    onChange={(e) => {
                         const v = e.target.value === '' ? null : parseFloat(e.target.value)
                         if (v === null) {
                           setBackgroundTrim(currentSceneIndex, null)
                           return
-                        }
-                        const prev = scene.backgroundTrim
-                        const end = scene.backgroundTrimEndClaimed
-                          ? (prev?.end ?? v)
-                          : v
-                        setBackgroundTrim(currentSceneIndex, { start: v, end: Math.max(v, end) })
-                      }}
-                      className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10"
-                    />
-                  </label>
-                  <label className="text-xs">
-                    Trim end (s)
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={scene.backgroundTrim?.end ?? ''}
-                      placeholder="full"
-                      onChange={(e) => {
-                        const v = e.target.value === '' ? null : parseFloat(e.target.value)
-                        if (v === null && !scene.backgroundTrim?.start) {
-                          setBackgroundTrim(currentSceneIndex, null)
-                          return
-                        }
-                        const start = scene.backgroundTrim?.start ?? 0
-                        if (v === null) setBackgroundTrim(currentSceneIndex, null)
-                        else setBackgroundTrim(currentSceneIndex, { start, end: Math.max(start, v) }, true)
-                      }}
-                      className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10"
-                    />
-                  </label>
-                </div>
-                {scene.backgroundTrim && (
+                          }
+                          const prev = scene.backgroundTrim
+                          const end = scene.backgroundTrimEndClaimed
+                            ? (prev?.end ?? v)
+                            : v
+                          setBackgroundTrim(currentSceneIndex, { start: v, end: Math.max(v, end) })
+                        }}
+                        className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10"
+                      />
+                    </label>
+                    <label className="text-xs">
+                      Trim end (s)
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={scene.backgroundTrim?.end ?? ''}
+                        placeholder="full"
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? null : parseFloat(e.target.value)
+                          if (v === null && !scene.backgroundTrim?.start) {
+                            setBackgroundTrim(currentSceneIndex, null)
+                            return
+                          }
+                          const start = scene.backgroundTrim?.start ?? 0
+                          if (v === null) setBackgroundTrim(currentSceneIndex, null)
+                          else setBackgroundTrim(currentSceneIndex, { start, end: Math.max(start, v) }, true)
+                        }}
+                        className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10"
+                      />
+                    </label>
+                  </div>
+                  {scene.backgroundTrim && (
+                    <button
+                      type="button"
+                      onClick={() => setBackgroundTrim(currentSceneIndex, null)}
+                      className="text-xs text-white/50 hover:text-white"
+                    >
+                      Full video
+                    </button>
+                  )}
+                </>
+            )}
+
+              </div>
+            )}
+
+            {planeMedia && planeIsVideo && (
+              <div className="pl-2 border-l-2 border-white/10 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-white/50">Panel trim</span>
                   <button
                     type="button"
-                    onClick={() => setBackgroundTrim(currentSceneIndex, null)}
-                    className="text-xs text-white/50 hover:text-white"
+                    onClick={() => setTrimEditorOpen('plane')}
+                    className="text-xs px-2 py-1 rounded bg-white/10 text-white/80 hover:bg-white/20 shrink-0"
                   >
-                    Full video
+                    Edit
                   </button>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {planeMedia && planeIsVideo && (
-          <div className="pl-2 border-l-2 border-white/10 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-white/50">Panel trim</span>
-              <button
-                type="button"
-                onClick={() => setTrimEditorOpen('plane')}
-                className="text-xs px-2 py-1 rounded bg-white/10 text-white/80 hover:bg-white/20 shrink-0"
-              >
-                Edit
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-xs text-white/50">Playback</span>
-              <button
-                type="button"
-                onClick={() => updateScene(currentSceneIndex, { planeVideoPlaybackMode: 'normal' })}
-                className={`text-xs px-2 py-1 rounded ${(scene.planeVideoPlaybackMode ?? 'normal') === 'normal' ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
-              >
-                Normal
-              </button>
-              <button
-                type="button"
-                onClick={() => updateScene(currentSceneIndex, { planeVideoPlaybackMode: 'fitScene' })}
-                className={`text-xs px-2 py-1 rounded ${(scene.planeVideoPlaybackMode ?? 'normal') === 'fitScene' ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
-              >
-                Fit to scene
-              </button>
-            </div>
-            <label className="block text-xs">
-              Speed
-              <input
-                type="number"
-                min={0.1}
-                max={4}
-                step={0.1}
-                value={scene.planeVideoSpeed ?? 1}
-                onChange={(e) =>
-                  updateScene(currentSceneIndex, {
-                    planeVideoSpeed: clamp(parseNum(e.target.value, 1), 0.1, 4),
-                  })
-                }
-                className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10"
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="text-xs">
-                Trim start (s)
-                <input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={scene.planeTrim?.start ?? ''}
-                  placeholder="0"
-                  onChange={(e) => {
-                    const v = e.target.value === '' ? null : parseFloat(e.target.value)
-                    if (v === null) {
-                      setPlaneTrim(currentSceneIndex, null)
-                      return
+                </div>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-xs text-white/50">Playback</span>
+                  <button
+                    type="button"
+                    onClick={() => updateScene(currentSceneIndex, { planeVideoPlaybackMode: 'normal' })}
+                    className={`text-xs px-2 py-1 rounded ${(scene.planeVideoPlaybackMode ?? 'normal') === 'normal' ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+                  >
+                    Normal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateScene(currentSceneIndex, { planeVideoPlaybackMode: 'fitScene' })}
+                    className={`text-xs px-2 py-1 rounded ${(scene.planeVideoPlaybackMode ?? 'normal') === 'fitScene' ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+                  >
+                    Fit to scene
+                  </button>
+                </div>
+                <label className="block text-xs">
+                  Speed
+                  <input
+                    type="number"
+                    min={0.1}
+                    max={4}
+                    step={0.1}
+                    value={scene.planeVideoSpeed ?? 1}
+                    onChange={(e) =>
+                      updateScene(currentSceneIndex, {
+                        planeVideoSpeed: clamp(parseNum(e.target.value, 1), 0.1, 4),
+                      })
                     }
-                    const prev = scene.planeTrim
-                    const end = scene.planeTrimEndClaimed
-                      ? (prev?.end ?? v)
-                      : v
-                    setPlaneTrim(currentSceneIndex, { start: v, end: Math.max(v, end) })
-                  }}
-                  className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10"
-                />
-              </label>
-              <label className="text-xs">
-                Trim end (s)
-                <input
-                  type="number"
-                  min={0}
+                    className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10"
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  Trim start (s)
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={scene.planeTrim?.start ?? ''}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const v = e.target.value === '' ? null : parseFloat(e.target.value)
+                      if (v === null) {
+                        setPlaneTrim(currentSceneIndex, null)
+                        return
+                      }
+                      const prev = scene.planeTrim
+                      const end = scene.planeTrimEndClaimed
+                        ? (prev?.end ?? v)
+                        : v
+                      setPlaneTrim(currentSceneIndex, { start: v, end: Math.max(v, end) })
+                    }}
+                    className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10"
+                  />
+                </label>
+                <label className="text-xs">
+                  Trim end (s)
+                  <input
+                    type="number"
+                    min={0}
                   step={0.1}
                   value={scene.planeTrim?.end ?? ''}
                   placeholder="full"

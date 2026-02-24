@@ -39,7 +39,7 @@ export function getFlyoverStateAt(
   const keyframes = getFlyoverKeyframes(scene)
   const flyover = scene?.flyover
   if (keyframes.length === 0) {
-    return { position: [0, 0, 3.5], rotation: [0, 0, 0], fov: FOV_DEFAULT }
+    return { position: [0, 0, 2], rotation: [0, 0, 0], fov: FOV_DEFAULT }
   }
   if (keyframes.length === 1) {
     const k = keyframes[0]
@@ -50,7 +50,7 @@ export function getFlyoverStateAt(
     }
   }
   let i = 0
-  for (; i < keyframes.length - 1 && keyframes[i + 1].time <= t; i++) {}
+  for (; i < keyframes.length - 1 && keyframes[i + 1].time <= t; i++) { }
   const k0 = keyframes[i]
   const k1 = keyframes[Math.min(i + 1, keyframes.length - 1)]
   const segDuration = k1.time - k0.time

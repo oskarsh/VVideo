@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { X, Play, Pause } from 'lucide-react'
 import { useStore } from '@/store'
 import { Modal } from '@/components/Modal'
 
@@ -313,7 +314,7 @@ export function TrimEditorModal({
       <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">{title}</h3>
         <button type="button" onClick={onClose} className="text-white/50 hover:text-white p-1" aria-label="Close">
-          ✕
+          <X className="w-4 h-4" />
         </button>
       </div>
 
@@ -338,7 +339,7 @@ export function TrimEditorModal({
             className="absolute bottom-2 right-2 w-12 h-12 rounded-full bg-white/90 flex items-center justify-center text-xl text-black hover:bg-white shadow-lg"
             title={playing ? 'Pause' : 'Play'}
           >
-            {playing ? '❚❚' : '▶'}
+            {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
           </button>
         </div>
 

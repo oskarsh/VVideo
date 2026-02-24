@@ -26,6 +26,7 @@ export interface Preset {
 
 /** Strip blob URLs so presets are serializable and portable. */
 export function projectForPreset(project: Project): Project {
+  const stripBlob = (url: string) => (url.startsWith('blob:') ? '' : url)
   return {
     ...project,
     id: project.id,
@@ -37,6 +38,10 @@ export function projectForPreset(project: Project): Project {
     planeMedia: null,
     dither: project.dither ?? DEFAULT_DITHER,
     globalEffects: project.globalEffects ? { ...project.globalEffects } : undefined,
+    panes: project.panes?.map((p) => ({
+      ...p,
+      media: { ...p.media, url: stripBlob(p.media.url) },
+    })),
     scenes: project.scenes.map((s) => ({ ...s })),
   }
 }
@@ -53,7 +58,6 @@ export function applyPreset(preset: Preset, currentProject: Project): Project {
     planeVideoUrl: currentProject.planeVideoUrl,
     planeMedia: currentProject.planeMedia,
     planeExtrusionDepth: currentProject.planeExtrusionDepth,
-    planeSvgColor: currentProject.planeSvgColor,
     dither: preset.project.dither ?? currentProject.dither ?? DEFAULT_DITHER,
     globalEffects: preset.project.globalEffects ?? currentProject.globalEffects,
     scenes: preset.project.scenes.map((s, i) => {
@@ -68,24 +72,36 @@ export function applyPreset(preset: Preset, currentProject: Project): Project {
   }
 }
 
-/** Apply preset look (dither, aspect, per-scene effects) but keep current keyframes and scene structure. */
+/** Project keys we keep from current when applying preset (identity + media); all other project fields come from preset. */
+const PROJECT_KEEP_FROM_CURRENT: (keyof Project)[] = [
+  'id', 'name', 'backgroundVideoUrl', 'backgroundTexture', 'planeVideoUrl', 'planeMedia', 'scenes', 'panes',
+]
+
+/** Scene keys we keep from current when applying preset (identity + trims); all other scene fields come from preset. */
+const SCENE_KEEP_FROM_CURRENT: (keyof Scene)[] = [
+  'id', 'backgroundTrim', 'planeTrim', 'paneTrims', 'backgroundTrimEndClaimed', 'planeTrimEndClaimed',
+]
+
+/** Apply preset look: merge preset into current, but keep project identity/media/panes/scenes and per-scene identity/trims. New project/scene "look" fields are applied automatically. */
 export function applyPresetKeepKeyframes(preset: Preset, currentProject: Project): Project {
   const presetScenes = preset.project.scenes
   const templateScene = presetScenes[0]
-  return {
-    ...currentProject,
-    aspectRatio: preset.project.aspectRatio,
-    dither: preset.project.dither ?? currentProject.dither ?? DEFAULT_DITHER,
-    globalEffects: currentProject.globalEffects,
-    scenes: currentProject.scenes.map((cur, i) => {
-      const from = presetScenes[i] ?? templateScene
-      return {
-        ...cur,
-        effects: from.effects,
-        flyover: from.flyover ?? cur.flyover,
-      }
-    }),
+  const merged: Project = { ...preset.project, ...currentProject }
+  for (const k of PROJECT_KEEP_FROM_CURRENT) {
+    if (k === 'scenes') continue
+      ; (merged as unknown as Record<string, unknown>)[k] = (currentProject as unknown as Record<string, unknown>)[k]
   }
+  merged.scenes = currentProject.scenes.map((cur, i) => {
+    const from = presetScenes[i] ?? templateScene
+    const scene: Scene = { ...from, ...cur }
+    for (const k of SCENE_KEEP_FROM_CURRENT) {
+      (scene as unknown as Record<string, unknown>)[k] = (cur as unknown as Record<string, unknown>)[k]
+    }
+    return scene
+  })
+  merged.dither = preset.project.dither ?? currentProject.dither ?? DEFAULT_DITHER
+  merged.globalEffects = preset.project.globalEffects ?? currentProject.globalEffects
+  return merged
 }
 
 function buildDefaultPresets(): Preset[] {
@@ -143,11 +159,11 @@ function buildDefaultPresets(): Preset[] {
       ),
     })
 
-  const setGlitch = (enabled: boolean, mode: 'sporadic' | 'constantMild' = 'sporadic') =>
+  const setGlitch = (enabled: boolean, algorithm: 'sporadic' | 'constantMild' = 'sporadic') =>
     (sc: Scene) => ({
       ...sc,
       effects: sc.effects.map((e) =>
-        e.type === 'glitch' ? { ...e, enabled, mode } : e
+        e.type === 'glitch' ? { ...e, enabled, algorithm } : e
       ),
     })
 
@@ -172,15 +188,15 @@ function buildDefaultPresets(): Preset[] {
       effects: sc.effects.map((e) =>
         e.type === 'handheld'
           ? {
-              ...e,
-              enabled,
-              intensityStart: intensity,
-              intensityEnd: intensity,
-              rotationShakeStart: rotationShake,
-              rotationShakeEnd: rotationShake,
-              speedStart: speed,
-              speedEnd: speed,
-            }
+            ...e,
+            enabled,
+            intensityStart: intensity,
+            intensityEnd: intensity,
+            rotationShakeStart: rotationShake,
+            rotationShakeEnd: rotationShake,
+            speedStart: speed,
+            speedEnd: speed,
+          }
           : e
       ),
     })

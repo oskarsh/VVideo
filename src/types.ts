@@ -88,8 +88,8 @@ export interface SceneEffectDither {
   enabled: boolean
   /** Preset: subtle, medium, strong, custom (custom uses levels) */
   preset: 'subtle' | 'medium' | 'strong' | 'custom'
-  /** Dither mode: bayer2, bayer4, bayer8, random */
-  mode: 'bayer2' | 'bayer4' | 'bayer8' | 'random'
+  /** Dither mode: Bayer matrices, random, value noise, halftone, line screen */
+  mode: 'bayer2' | 'bayer4' | 'bayer8' | 'bayer16' | 'random' | 'valueNoise' | 'halftone' | 'lines'
   /** Color levels (2–32). Used when preset is 'custom', or as base for presets. */
   levels: number
   /** Blend strength of dither with original (0–1). Default 1. */
@@ -100,6 +100,9 @@ export interface SceneEffectDither {
   thresholdBias: number
 }
 
+/** How chromatic aberration RGB shift is oriented. */
+export type ChromaticDirection = 'omnidirectional' | 'horizontal' | 'vertical' | 'diagonal'
+
 /** Chromatic aberration (RGB shift) at edges. Keyframed start/end. */
 export interface SceneEffectChromaticAberration {
   type: 'chromaticAberration'
@@ -108,8 +111,12 @@ export interface SceneEffectChromaticAberration {
   offsetStart: number
   /** Shift intensity. End keyframe. */
   offsetEnd: number
-  /** Radial falloff from center. */
+  /** Radial falloff from center (stronger at edges). */
   radialModulation: boolean
+  /** Direction of the RGB shift. */
+  direction?: ChromaticDirection
+  /** When radial: distance from center where effect starts (0–0.5). */
+  modulationOffset?: number
 }
 
 /** Lens distortion (barrel/pincushion). Keyframed start/end. */
@@ -122,15 +129,20 @@ export interface SceneEffectLensDistortion {
   distortionEnd: number
 }
 
-/** Glitch: sporadic or constant. */
+/** Glitch algorithm: library modes or custom block/noise. */
+export type GlitchAlgorithm = 'sporadic' | 'constantMild' | 'constantWild' | 'block' | 'noise'
+
+/** Glitch: algorithm choice + timing/strength. */
 export interface SceneEffectGlitch {
   type: 'glitch'
   enabled: boolean
-  /** sporadic | constantMild */
-  mode: 'sporadic' | 'constantMild'
+  /** Which glitch style to use. */
+  algorithm: GlitchAlgorithm
+  /** @deprecated Use algorithm. Kept for backward compat. */
+  mode?: 'sporadic' | 'constantMild'
   /** 0 = more weak glitches, 1 = more strong. */
   ratio: number
-  /** Column slice width. */
+  /** Column slice width (slice-based algorithms). */
   columns: number
   /** Min/max delay between glitches (seconds). Lower = faster. */
   delayMin: number
@@ -196,7 +208,7 @@ export interface GlobalEffectKeyframeDither {
   time: number
   enabled?: boolean
   preset: 'subtle' | 'medium' | 'strong' | 'custom'
-  mode: 'bayer2' | 'bayer4' | 'bayer8' | 'random'
+  mode: 'bayer2' | 'bayer4' | 'bayer8' | 'bayer16' | 'random' | 'valueNoise' | 'halftone' | 'lines'
   levels: number
   intensity: number
   luminanceOnly: boolean
@@ -230,6 +242,7 @@ export interface GlobalEffectKeyframeLens {
 export interface GlobalEffectKeyframeGlitch {
   time: number
   enabled?: boolean
+  algorithm?: GlitchAlgorithm
   mode?: 'sporadic' | 'constantMild'
   ratio: number
   columns: number
@@ -349,11 +362,10 @@ export interface Scene {
   texts: SceneText[]
 }
 
-/** Panel content: video on plane, image on plane, or SVG rendered as 3D shape (no plane). */
+/** Panel content: video on plane or image on plane. */
 export type PlaneMedia =
   | { type: 'video'; url: string }
   | { type: 'image'; url: string }
-  | { type: 'svg'; url: string }
 
 /** Per-pane animation: lerp from start to end over scene duration. */
 export interface PaneAnimation {
@@ -365,7 +377,7 @@ export interface PaneAnimation {
   rotationEnd: [number, number, number]
 }
 
-/** A single pane (video, image, or SVG) in 3D space. Multiple panes can be layered by zIndex. */
+/** A single pane (video or image) in 3D space. Multiple panes can be layered by zIndex. */
 export interface Pane {
   id: string
   media: PlaneMedia
@@ -378,7 +390,6 @@ export interface Pane {
   /** Rotation [x, y, z] in radians (euler). */
   rotation: [number, number, number]
   extrusionDepth: number
-  planeSvgColor?: string | null
   /** When set, position/scale/rotation are lerped from start to end over the scene duration. */
   animation?: PaneAnimation | null
 }
@@ -425,13 +436,11 @@ export interface Project {
   backgroundVideoContinuous?: boolean
   /** One shared plane video for all scenes; each scene defines its own trim (cut). @deprecated Use planeMedia instead. */
   planeVideoUrl?: string | null
-  /** Panel media: video, image, or SVG. When set, takes precedence over planeVideoUrl. */
+  /** Panel media: video or image. When set, takes precedence over planeVideoUrl. */
   planeMedia?: PlaneMedia | null
-  /** Extrusion depth for panel (video/image plane or SVG shape). 0 = flat. */
+  /** Extrusion depth for panel (video/image plane). 0 = flat. */
   planeExtrusionDepth?: number
-  /** When panel is SVG: override fill color (hex e.g. #ffffff). Null = use SVG’s own colors. */
-  planeSvgColor?: string | null
-  /** Multiple panes (video/image/SVG) with z-order and optional animation. When non-empty, used instead of single planeMedia. */
+  /** Multiple panes (video/image) with z-order and optional animation. When non-empty, used instead of single planeMedia. */
   panes?: Pane[]
   /** Global dither applied to all scenes. */
   dither: SceneEffectDither
@@ -457,7 +466,6 @@ export function createDefaultPane(id: string): Pane {
     scale: 1,
     rotation: [0, 0, 0],
     extrusionDepth: 0,
-    planeSvgColor: null,
     animation: null,
   }
 }
@@ -479,7 +487,6 @@ export function getPanesForRender(project: Project): Pane[] {
       scale: 1,
       rotation: [0, 0, 0],
       extrusionDepth: project.planeExtrusionDepth ?? 0,
-      planeSvgColor: project.planeSvgColor ?? null,
       animation: null,
     },
   ]
@@ -547,6 +554,8 @@ export function createDefaultScene(id: string): Scene {
         offsetStart: 0.005,
         offsetEnd: 0.005,
         radialModulation: true,
+        direction: 'omnidirectional',
+        modulationOffset: 0.15,
       },
       {
         type: 'lensDistortion',
@@ -557,7 +566,7 @@ export function createDefaultScene(id: string): Scene {
       {
         type: 'glitch',
         enabled: false,
-        mode: 'sporadic',
+        algorithm: 'sporadic',
         ratio: 0.85,
         columns: 0.05,
         delayMin: 1.5,

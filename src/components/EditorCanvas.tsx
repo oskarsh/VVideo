@@ -13,7 +13,6 @@ import {
 } from '@react-three/postprocessing'
 import { GlitchMode } from 'postprocessing'
 import * as THREE from 'three'
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { useStore } from '@/store'
 import { setFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyKeys, setFlyKey, isFlyKey } from '@/flyKeys'
@@ -21,6 +20,8 @@ import { applyFlyoverEasing } from '@/easing'
 import { getFlyoverKeyframes } from '@/lib/flyover'
 import { DitherEffect } from '@/effects/DitherEffect'
 import { LensDistortion } from '@/effects/LensDistortionEffect'
+import { BlockGlitchEffect } from '@/effects/BlockGlitchEffect'
+import { NoiseGlitchEffect } from '@/effects/NoiseGlitchEffect'
 import type {
   Scene as SceneType,
   SceneEffectZoom,
@@ -397,192 +398,6 @@ function PlaneImage({
   )
 }
 
-function PlaneSVG({
-  url,
-  extrusionDepth,
-  colorOverride,
-}: {
-  url: string
-  extrusionDepth: number
-  colorOverride?: string | null
-}) {
-  const groupRef = useRef<THREE.Group>(null)
-  const [svgState, setSvgState] = useState<{
-    meshes: Array<{
-      geometry: THREE.BufferGeometry
-      material: THREE.Material
-      position: [number, number, number]
-    }>
-    scale: number
-  } | null>(null)
-  const meshesRef = useRef<typeof svgState>(null)
-  const [fallbackTexture, setFallbackTexture] = useState<THREE.Texture | null>(null)
-  const [fallbackAspect, setFallbackAspect] = useState(1)
-  const fallbackTexRef = useRef<THREE.Texture | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const loader = new SVGLoader()
-    const useTextureFallback = () => {
-      if (cancelled) return
-      const texLoader = new THREE.TextureLoader()
-      texLoader.load(
-        url,
-        (tex) => {
-          if (cancelled) {
-            tex.dispose()
-            return
-          }
-          tex.colorSpace = THREE.SRGBColorSpace
-          tex.minFilter = THREE.LinearFilter
-          tex.magFilter = THREE.LinearFilter
-          fallbackTexRef.current?.dispose()
-          fallbackTexRef.current = tex
-          setFallbackTexture(tex)
-          const img = tex.image as HTMLImageElement
-          if (img?.naturalWidth && img.naturalHeight) {
-            setFallbackAspect(img.naturalWidth / img.naturalHeight)
-          }
-        },
-        undefined,
-        () => {
-          if (!cancelled) setFallbackTexture(null)
-        }
-      )
-    }
-
-    loader.load(
-      url,
-      (data) => {
-        if (cancelled) return
-        if (meshesRef.current?.meshes) {
-          meshesRef.current.meshes.forEach(({ geometry, material }) => {
-            geometry.dispose()
-            material.dispose()
-          })
-          meshesRef.current = null
-        }
-        fallbackTexRef.current?.dispose()
-        fallbackTexRef.current = null
-        setFallbackTexture(null)
-
-        const paths: Array<{ shapes: THREE.Shape[]; color: THREE.Color }> = []
-        for (const path of data.paths) {
-          const shapes = path.toShapes(true)
-          if (shapes.length > 0) {
-            paths.push({ shapes, color: path.color.clone() })
-          }
-        }
-        if (paths.length === 0) {
-          setSvgState(null)
-          useTextureFallback()
-          return
-        }
-        const svg = data.xml.documentElement
-        let viewBox = { minX: 0, minY: 0, width: 100, height: 100 }
-        const vb = svg.getAttribute('viewBox')
-        if (vb) {
-          const parts = vb.split(/\s+/).map(Number)
-          if (parts.length >= 4 && parts.every(Number.isFinite)) {
-            viewBox = { minX: parts[0], minY: parts[1], width: parts[2], height: parts[3] }
-          }
-        } else if (svg.hasAttribute('width') && svg.hasAttribute('height')) {
-          viewBox.width = parseFloat(svg.getAttribute('width')!) || 100
-          viewBox.height = parseFloat(svg.getAttribute('height')!) || 100
-        }
-        const vbW = viewBox.width || 1
-        const vbH = viewBox.height || 1
-        const scale = (BASE_PLANE_SIZE * 0.8) / Math.max(vbW, vbH)
-        const offsetX = -viewBox.minX - vbW / 2
-        const offsetY = -viewBox.minY - vbH / 2
-        const depth = Math.max(0, extrusionDepth)
-        const overrideColor =
-          colorOverride != null && colorOverride !== ''
-            ? new THREE.Color(colorOverride)
-            : null
-        const built: Array<{
-          geometry: THREE.BufferGeometry
-          material: THREE.Material
-          position: [number, number, number]
-        }> = []
-        for (const { shapes, color } of paths) {
-          const geometry =
-            depth > 0
-              ? new THREE.ExtrudeGeometry(shapes, { depth: depth * 0.5, bevelEnabled: false })
-              : new THREE.ShapeGeometry(shapes)
-          const material = new THREE.MeshBasicMaterial({
-            color: overrideColor ?? color,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 1,
-            alphaTest: 0.01,
-          })
-          built.push({
-            geometry,
-            material,
-            position: [offsetX, offsetY, depth > 0 ? -depth * 0.25 : 0],
-          })
-        }
-        const state = { meshes: built, scale }
-        meshesRef.current = state
-        setSvgState(state)
-      },
-      undefined,
-      () => {
-        if (!cancelled) {
-          setSvgState(null)
-          useTextureFallback()
-        }
-      }
-    )
-    return () => {
-      cancelled = true
-      if (meshesRef.current?.meshes) {
-        meshesRef.current.meshes.forEach(({ geometry, material }) => {
-          geometry.dispose()
-          material.dispose()
-        })
-        meshesRef.current = null
-      }
-      fallbackTexRef.current?.dispose()
-      fallbackTexRef.current = null
-      setFallbackTexture(null)
-    }
-  }, [url, extrusionDepth, colorOverride])
-
-  if (fallbackTexture) {
-    const scaleX = fallbackAspect >= 1 ? BASE_PLANE_SIZE : BASE_PLANE_SIZE * fallbackAspect
-    const scaleY = fallbackAspect >= 1 ? BASE_PLANE_SIZE / fallbackAspect : BASE_PLANE_SIZE
-    const depth = Math.max(0, extrusionDepth)
-    return (
-      <mesh position={[0, 0, 0]} scale={[scaleX, scaleY, depth > 0 ? depth : 1]}>
-        {depth > 0 ? (
-          <boxGeometry args={[1, 1, 1]} />
-        ) : (
-          <planeGeometry args={[1, 1]} />
-        )}
-        <meshBasicMaterial
-          map={fallbackTexture}
-          side={THREE.DoubleSide}
-          transparent
-          alphaTest={0.01}
-          depthWrite={true}
-        />
-      </mesh>
-    )
-  }
-
-  if (!svgState || svgState.meshes.length === 0) return null
-  const { meshes, scale } = svgState
-  return (
-    <group ref={groupRef} position={[0, 0, 0]} scale={[scale, -scale, 1]}>
-      {meshes.map(({ geometry, material, position }, i) => (
-        <mesh key={i} geometry={geometry} material={material} position={position} />
-      ))}
-    </group>
-  )
-}
-
 const TEXT_CANVAS_PX = 64
 
 function TextPlane3D({ text }: { text: SceneText }) {
@@ -679,7 +494,7 @@ function SinglePane({
     : pane.rotation
 
   const trim = scene.paneTrims?.[pane.id] ?? scene.planeTrim ?? null
-  const { media, extrusionDepth, planeSvgColor } = pane
+  const { media, extrusionDepth } = pane
 
   if (!media.url) return null
 
@@ -699,13 +514,6 @@ function SinglePane({
       )}
       {media.type === 'image' && (
         <PlaneImage url={media.url} extrusionDepth={extrusionDepth} />
-      )}
-      {media.type === 'svg' && (
-        <PlaneSVG
-          url={media.url}
-          extrusionDepth={extrusionDepth}
-          colorOverride={planeSvgColor}
-        />
       )}
     </group>
   )
@@ -1196,7 +1004,7 @@ function SceneContent() {
         : ditherPreset === 'medium'
           ? 8
           : 4
-  const ditherModeIndex = { bayer2: 0, bayer4: 1, bayer8: 2, random: 3 }[ditherMode]
+  const ditherModeIndex = ({ bayer2: 0, bayer4: 1, bayer8: 2, random: 3, bayer16: 4, valueNoise: 5, halftone: 6, lines: 7 } as Record<string, number>)[ditherMode] ?? 1
   const ditherIntensity = ditherEffect?.intensity ?? 1
   const ditherLuminanceOnly = ditherEffect?.luminanceOnly ?? false
   const ditherThresholdBias = ditherEffect?.thresholdBias ?? 0
@@ -1215,10 +1023,21 @@ function SceneContent() {
           chromaticEffect.offsetStart ?? (chromaticEffect as { offset?: number }).offset ?? 0.005,
           chromaticEffect.offsetEnd ?? (chromaticEffect as { offset?: number }).offset ?? 0.005
         )
-  const chromaticOffset = useMemo(
-    () => new THREE.Vector2(chromaticOffsetVal, chromaticOffsetVal * 0.5),
-    [chromaticOffsetVal]
-  )
+  const chromaticDirection = chromaticEffect?.direction ?? 'omnidirectional'
+  const chromaticOffset = useMemo(() => {
+    const v = chromaticOffsetVal
+    switch (chromaticDirection) {
+      case 'horizontal':
+        return new THREE.Vector2(v, 0)
+      case 'vertical':
+        return new THREE.Vector2(0, v)
+      case 'diagonal':
+        return new THREE.Vector2(v * 0.7, v * 0.7)
+      default:
+        return new THREE.Vector2(v, v * 0.5)
+    }
+  }, [chromaticOffsetVal, chromaticDirection])
+  const chromaticModulationOffset = chromaticEffect?.modulationOffset ?? 0.15
 
   const lensEffect = scene.effects.find(
     (e): e is SceneEffectLensDistortion => e.type === 'lensDistortion'
@@ -1242,10 +1061,16 @@ function SceneContent() {
 
   const glitchEffect = scene.effects.find((e): e is SceneEffectGlitch => e.type === 'glitch')
   const glitchEnabled = globalGlitch != null ? (globalGlitch.enabled as boolean) : (glitchEffect?.enabled ?? false)
+  const glitchAlgorithm =
+    (globalGlitch != null ? globalGlitch.algorithm : glitchEffect?.algorithm) ??
+    (glitchEffect?.mode === 'constantMild' ? 'constantMild' : 'sporadic')
   const glitchMode =
-    (globalGlitch != null ? globalGlitch.mode : glitchEffect?.mode) === 'constantMild'
-      ? GlitchMode.CONSTANT_MILD
-      : GlitchMode.SPORADIC
+    glitchAlgorithm === 'constantWild'
+      ? GlitchMode.CONSTANT_WILD
+      : glitchAlgorithm === 'constantMild'
+        ? GlitchMode.CONSTANT_MILD
+        : GlitchMode.SPORADIC
+  const useLibraryGlitch = glitchAlgorithm === 'sporadic' || glitchAlgorithm === 'constantMild' || glitchAlgorithm === 'constantWild'
   const glitchDelay = useMemo(
     () =>
       new THREE.Vector2(
@@ -1383,15 +1208,6 @@ function SceneContent() {
         if (planeMedia.type === 'image') {
           return <PlaneImage url={planeMedia.url} extrusionDepth={extrusion} />
         }
-        if (planeMedia.type === 'svg') {
-          return (
-            <PlaneSVG
-              url={planeMedia.url}
-              extrusionDepth={extrusion}
-              colorOverride={project.planeSvgColor}
-            />
-          )
-        }
         return null
       })()}
       {(scene.texts ?? []).filter((t) => t.mode === '3d').map((t) => (
@@ -1413,7 +1229,7 @@ function SceneContent() {
         <ChromaticAberration
           offset={chromaticOffset}
           radialModulation={chromaticEffect?.radialModulation ?? true}
-          modulationOffset={0.15}
+          modulationOffset={chromaticModulationOffset}
           opacity={chromaticEnabled ? 1 : 0}
         />
         <LensDistortion
@@ -1422,15 +1238,36 @@ function SceneContent() {
           focalLength={lensFocalLength}
           opacity={lensEnabled ? 1 : 0}
         />
-        <Glitch
-          active={glitchEnabled}
-          mode={glitchMode}
-          ratio={glitchEffect?.ratio ?? 0.85}
-          columns={glitchEffect?.columns ?? 0.05}
-          delay={glitchDelay}
-          duration={glitchDuration}
-          chromaticAberrationOffset={glitchChromaticOffset}
-        />
+        {useLibraryGlitch ? (
+          <Glitch
+            active={glitchEnabled}
+            mode={glitchMode}
+            ratio={glitchEffect?.ratio ?? 0.85}
+            columns={glitchEffect?.columns ?? 0.05}
+            delay={glitchDelay}
+            duration={glitchDuration}
+            chromaticAberrationOffset={glitchChromaticOffset}
+          />
+        ) : glitchEnabled && glitchAlgorithm === 'block' ? (
+          <BlockGlitchEffect
+            amount={0.06}
+            blockSize={glitchEffect?.columns ?? 0.05}
+            delayMin={Number(globalGlitch?.delayMin ?? glitchEffect?.delayMin ?? 1.5)}
+            delayMax={Number(globalGlitch?.delayMax ?? glitchEffect?.delayMax ?? 3.5)}
+            durationMin={Number(globalGlitch?.durationMin ?? glitchEffect?.durationMin ?? 0.6)}
+            durationMax={Number(globalGlitch?.durationMax ?? glitchEffect?.durationMax ?? 1)}
+          />
+        ) : glitchEnabled && glitchAlgorithm === 'noise' ? (
+          <NoiseGlitchEffect
+            amount={0.4}
+            delayMin={Number(globalGlitch?.delayMin ?? glitchEffect?.delayMin ?? 1.5)}
+            delayMax={Number(globalGlitch?.delayMax ?? glitchEffect?.delayMax ?? 3.5)}
+            durationMin={Number(globalGlitch?.durationMin ?? glitchEffect?.durationMin ?? 0.6)}
+            durationMax={Number(globalGlitch?.durationMax ?? glitchEffect?.durationMax ?? 1)}
+          />
+        ) : (
+          <></>
+        )}
         <DitherEffect
           levels={ditherLevels}
           mode={ditherModeIndex}
@@ -1488,9 +1325,9 @@ export function EditorCanvas() {
       <Canvas
         key={useAlpha ? 'plane-only' : 'full'}
         gl={{ preserveDrawingBuffer: true, alpha: useAlpha }}
-        camera={{ position: [0, 0, 3.5], fov: FOV_DEG }}
+        camera={{ position: [0, 0, 2], fov: FOV_DEG }}
         onCreated={({ camera }) => {
-          camera.position.set(0, 0, 3.5)
+          camera.position.set(0, 0, 2)
         }}
       >
         <Suspense fallback={null}>

@@ -24,7 +24,10 @@ export function VideoThumbnail({
     video.muted = true
     video.volume = 0
     video.playsInline = true
-    video.crossOrigin = 'anonymous'
+    // Only use CORS for cross-origin URLs; same-origin (e.g. /example-assets/...) can fail with anonymous
+    if (!url.startsWith('blob:') && !url.startsWith('/')) {
+      video.crossOrigin = 'anonymous'
+    }
 
     const onLoadedMetadata = () => {
       const t = Math.max(0, Math.min(time, video.duration || 0))

@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom'
 import { useStore } from '@/store'
 import { useFloatingPanels } from '@/hooks/useFloatingPanels'
 import { DEFAULT_DITHER } from '@/types'
-import { createKeyframeAtTime, getGlobalEffectStateAtTime } from '@/lib/globalEffects'
+import { getGlobalEffectStateAtTime } from '@/lib/globalEffects'
 import { DraggableEffectWindow } from './DraggableEffectWindow'
 import { FlyoverPanel } from './FlyoverPanel'
 import { PanelRow } from './PanelRow'
@@ -41,7 +41,6 @@ export function RightSidebar() {
   const dither = project.dither ?? DEFAULT_DITHER
   const hasFlyover = Boolean(scene?.flyover)
   const setGlobalEffectTrack = useStore((s) => s.setGlobalEffectTrack)
-  const setGlobalEffectKeyframeAtTime = useStore((s) => s.setGlobalEffectKeyframeAtTime)
   const currentTime = useStore((s) => s.currentTime)
   const sceneStartTime = project.scenes
     .slice(0, currentSceneIndex)
@@ -71,7 +70,6 @@ export function RightSidebar() {
       const currentlyEnabled = getEffectEnabled(effectType)
       const nextEnabled = !currentlyEnabled
       setGlobalEffectTrack(effectType, { ...track, enabled: nextEnabled })
-      if (nextEnabled) setGlobalEffectKeyframeAtTime(effectType, currentTime, { enabled: true })
       return
     }
     if (effectType === 'dither') {
@@ -79,16 +77,12 @@ export function RightSidebar() {
       return
     }
     const currentlyEnabled = getEffectEnabled(effectType)
-    const state =
-      getGlobalEffectStateAtTime(project, effectType, currentTime) ??
-      (scene ? getSceneEffectStateAtTime(scene, effectType, sceneLocalTime, sceneDuration) : null)
-    const keyframe = createKeyframeAtTime(effectType, currentTime, state ? { ...state, enabled: !currentlyEnabled } : { enabled: !currentlyEnabled })
-    setGlobalEffectTrack(effectType, { enabled: !currentlyEnabled, keyframes: [keyframe] })
+    setGlobalEffectTrack(effectType, { enabled: !currentlyEnabled, keyframes: [] })
   }
 
   return (
-    <div className="p-3 space-y-0">
-      {/* Global effect rows — each opens floating window, on/off toggles effect or adds first keyframe */}
+    <div className="p-2 lg:p-3 space-y-0">
+      {/* Global effect rows — each opens floating window; on/off toggles effect only (keyframes added via panel sliders) */}
       {GLOBAL_EFFECT_TYPES.map((effectType) => (
         <PanelRow
           key={effectType}

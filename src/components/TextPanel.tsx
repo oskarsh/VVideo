@@ -1,8 +1,8 @@
+import { X } from 'lucide-react'
 import { useStore } from '@/store'
 import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
 import { parseNum, clamp } from '@/utils/numbers'
 import type { SceneText, SceneTextMode } from '@/types'
-import { createDefaultSceneText } from '@/types'
 
 const FONT_OPTIONS = [
   'IBM Plex Mono',
@@ -72,13 +72,10 @@ export function TextPanel() {
 
   if (!scene) return null
   const texts: SceneText[] = (scene.texts ?? []).map(ensureTextDefaults)
+  if (texts.length === 0) return null
 
   const setTexts = (next: SceneText[]) => {
     updateScene(currentSceneIndex, { texts: next })
-  }
-
-  const addText = () => {
-    setTexts([...texts, createDefaultSceneText(crypto.randomUUID())])
   }
 
   const updateText = (id: string, patch: Partial<SceneText>) => {
@@ -93,34 +90,21 @@ export function TextPanel() {
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-2">
-        <h2 className={sectionHeadingClass}>
-          Text
-        </h2>
-        <button
-          type="button"
-          onClick={addText}
-          className="text-xs font-medium text-white/70 hover:text-white"
-        >
-          + Add text
-        </button>
-      </div>
+      <h2 className={`${sectionHeadingClass} mb-2`}>
+        Text
+      </h2>
       <p className="text-xs text-white/50 mb-2">
         3D: placed in the room. Static: always in front of camera.
       </p>
       <div className="space-y-3">
-        {texts.length === 0 ? (
-          <p className="text-xs text-white/40 italic">No text yet. Add one above.</p>
-        ) : (
-          texts.map((t) => (
-            <TextItem
-              key={t.id}
-              text={t}
-              onChange={(patch) => updateText(t.id, patch)}
-              onRemove={() => removeText(t.id)}
-            />
-          ))
-        )}
+        {texts.map((t) => (
+          <TextItem
+            key={t.id}
+            text={t}
+            onChange={(patch) => updateText(t.id, patch)}
+            onRemove={() => removeText(t.id)}
+          />
+        ))}
       </div>
     </section>
   )
@@ -154,7 +138,7 @@ function TextItem({
           className="shrink-0 p-1 rounded text-white/50 hover:text-red-400 hover:bg-white/10"
           title="Remove text"
         >
-          ✕
+          <X className="w-4 h-4" />
         </button>
       </div>
       <div className="flex gap-2">

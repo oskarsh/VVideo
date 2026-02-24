@@ -2,13 +2,14 @@ import { create } from 'zustand'
 import type { Project, Scene, FlyoverKeyframeWithTime, SceneEffectDither, PlaneMedia, Pane, GlobalEffectType, GlobalEffectTrack, GlobalEffectKeyframe, BackgroundTexture } from '@/types'
 import { createDefaultProject, createDefaultScene, createDefaultPane, createDefaultSceneText, DEFAULT_DITHER, getPlaneMedia } from '@/types'
 import { DEFAULT_GLOBAL_KEYFRAMES } from '@/lib/globalEffects'
-import { getBuiltInPresets, applyPresetKeepKeyframes } from '@/lib/presets'
+import { getPresets, getSelectedPresetId, DEFAULT_PRESET_ID, applyPresetKeepKeyframes } from '@/lib/presets'
 
 function getInitialProject(): Project {
   const empty = createDefaultProject()
-  const builtin = getBuiltInPresets()
-  const defaultPreset = builtin[0]
-  return defaultPreset ? applyPresetKeepKeyframes(defaultPreset, empty) : empty
+  const presets = getPresets()
+  const selectedId = getSelectedPresetId()
+  const preset = presets.find((p) => p.id === selectedId) ?? presets.find((p) => p.id === DEFAULT_PRESET_ID) ?? presets[0]
+  return preset ? applyPresetKeepKeyframes(preset, empty) : empty
 }
 
 /** Snapshot of undoable state for history. */
@@ -84,7 +85,6 @@ interface EditorState {
   setProjectPlaneVideo: (url: string | null) => void
   setProjectPlaneMedia: (media: PlaneMedia | null) => void
   setProjectPlaneExtrusionDepth: (depth: number) => void
-  setProjectPlaneSvgColor: (color: string | null) => void
   setBackgroundTrim: (sceneIndex: number, trim: { start: number; end: number } | null, endClaimed?: boolean) => void
   setPlaneTrim: (sceneIndex: number, trim: { start: number; end: number } | null, endClaimed?: boolean) => void
   addPane: () => void
@@ -316,12 +316,6 @@ export const useStore = create<EditorState>((set) => ({
         project: { ...s.project, planeExtrusionDepth: Math.max(0, depth) },
       }))
     ),
-  setProjectPlaneSvgColor: (color) =>
-    set(
-      withHistory((s) => ({
-        project: { ...s.project, planeSvgColor: color ?? undefined },
-      }))
-    ),
   setBackgroundTrim: (sceneIndex, trim, endClaimed) =>
     set(
       withHistory((s) => ({
@@ -375,7 +369,6 @@ export const useStore = create<EditorState>((set) => ({
           if (legacy) {
             newPane.media = legacy
             newPane.extrusionDepth = s.project.planeExtrusionDepth ?? 0
-            newPane.planeSvgColor = s.project.planeSvgColor ?? null
           }
         }
         return {
@@ -394,7 +387,6 @@ export const useStore = create<EditorState>((set) => ({
         newPane.zIndex = panes.length
         newPane.media = media
         newPane.extrusionDepth = s.project.planeExtrusionDepth ?? 0
-        newPane.planeSvgColor = s.project.planeSvgColor ?? null
         return {
           project: {
             ...s.project,
@@ -644,9 +636,10 @@ export const useStore = create<EditorState>((set) => ({
       withHistory((s) => {
         const prev = s.project.globalEffects?.[effectType]
         if (!prev?.keyframes?.[index]) return s
-        const keyframes = prev.keyframes.map((k, i) =>
+        let keyframes = prev.keyframes.map((k, i) =>
           i === index ? { ...k, ...patch } : k
         )
+        if ('time' in patch) keyframes = [...keyframes].sort((a, b) => a.time - b.time)
         return {
           project: {
             ...s.project,

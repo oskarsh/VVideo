@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
+import { Play, Pause, Repeat, SkipForward, SkipBack } from 'lucide-react'
 import { useStore } from '@/store'
 import { useLayout } from '@/context/LayoutContext'
-import { getFlyoverEditCamera } from '@/flyoverCameraRef'
 import { EditorCanvas } from '@/components/EditorCanvas'
 import { Sidebar } from '@/components/Sidebar'
 import { RightSidebar } from '@/components/RightSidebar'
@@ -15,6 +15,7 @@ import { VVideoLogo } from '@/components/VVideoLogo'
 import { PresetDropdown } from '@/components/PresetDropdown'
 import { StaticTextOverlay } from '@/components/StaticTextOverlay'
 import { getPlaneMedia } from '@/types'
+import { getFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyoverKeyframes } from '@/lib/flyover'
 import { FRAME_BY_FRAME_RESOLUTION_THRESHOLD } from '@/constants/export'
 
@@ -23,12 +24,11 @@ function isMediaDrag(e: React.DragEvent | DragEvent): boolean {
   const item = e.dataTransfer.items?.[0]
   if (item?.kind !== 'file') return false
   const t = item.type
-  return t.startsWith('video/') || t.startsWith('image/') || t === 'image/svg+xml'
+  return t.startsWith('video/') || t.startsWith('image/')
 }
 
-function getPlaneMediaType(file: File): 'video' | 'image' | 'svg' {
+function getPlaneMediaType(file: File): 'video' | 'image' {
   if (file.type.startsWith('video/')) return 'video'
-  if (file.type === 'image/svg+xml' || file.name?.toLowerCase().endsWith('.svg')) return 'svg'
   if (file.type.startsWith('image/')) return 'image'
   return 'image'
 }
@@ -63,7 +63,7 @@ function MediaDropOverlay({
       return
     }
     if (type === 'background' && !file.type.startsWith('video/')) return
-    if (type === 'plane' && !file.type.startsWith('video/') && !file.type.startsWith('image/') && file.type !== 'image/svg+xml' && !file.name?.toLowerCase().endsWith('.svg')) return
+    if (type === 'plane' && !file.type.startsWith('video/') && !file.type.startsWith('image/')) return
     onDrop(file, type)
     onClose()
   }
@@ -91,7 +91,7 @@ function MediaDropOverlay({
       >
         <span className="text-4xl opacity-60">▢</span>
         <span className="text-lg font-medium text-white/90">Panel</span>
-        <span className="text-sm text-white/60">Drop video, image or SVG here</span>
+        <span className="text-sm text-white/60">Drop video or image here</span>
       </div>
     </div>
   )
@@ -244,7 +244,7 @@ export default function App() {
       setBackgroundTrim(currentSceneIndex, null)
     } else {
       const mediaType = getPlaneMediaType(file)
-      setProjectPlaneMedia(mediaType === 'video' ? { type: 'video', url } : mediaType === 'svg' ? { type: 'svg', url } : { type: 'image', url })
+      setProjectPlaneMedia(mediaType === 'video' ? { type: 'video', url } : { type: 'image', url })
       if (mediaType === 'video') setPlaneTrim(currentSceneIndex, null)
     }
     setShowDropOverlay(false)
@@ -272,7 +272,7 @@ export default function App() {
       <PlaybackLoop />
       <SpacebarPlayback />
       <UndoRedoKeys />
-      <header className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
+      <header className="flex items-center justify-between px-3 py-2 lg:px-4 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-3">
           <VVideoLogo className="h-6 text-white" />
           <button
@@ -298,12 +298,12 @@ export default function App() {
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        <aside className="w-72 border-r border-white/10 overflow-y-auto shrink-0">
+        <aside className="w-56 lg:w-64 xl:w-72 border-r border-white/10 overflow-y-auto shrink-0">
           <Sidebar />
         </aside>
         <main
           ref={contentRef}
-          className="flex-1 flex flex-col items-center justify-center gap-4 p-4 min-h-0"
+          className="flex-1 flex flex-col items-center justify-center gap-3 p-3 min-h-0 relative lg:gap-4 lg:p-4"
         >
           <div
             ref={previewRef}
@@ -315,12 +315,9 @@ export default function App() {
               <CanvasStaticTextOverlay />
             </div>
           </div>
-          <div className="flex w-full max-w-4xl items-center justify-between gap-4">
-            <CameraKeyframeButtons />
-            <CameraCoordsDisplay />
-          </div>
+          <FloatingTransportBar />
         </main>
-        <aside className="w-72 border-l border-white/10 overflow-y-auto shrink-0 bg-zinc-900/30">
+        <aside className="w-56 lg:w-64 xl:w-72 border-l border-white/10 overflow-y-auto shrink-0 bg-zinc-900/30">
           <RightSidebar />
         </aside>
       </div>
@@ -331,30 +328,52 @@ export default function App() {
   )
 }
 
-function CameraKeyframeButtons() {
+const KEYFRAME_SNAP_EPS = 0.008
+
+function FloatingTransportBar() {
+  const project = useStore((s) => s.project)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const currentTime = useStore((s) => s.currentTime)
-  const project = useStore((s) => s.project)
-  const scene = useStore((s) => s.project.scenes[currentSceneIndex])
+  const setCurrentTime = useStore((s) => s.setCurrentTime)
+  const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
+  const setPlaying = useStore((s) => s.setPlaying)
+  const isPlaying = useStore((s) => s.isPlaying)
+  const loopCurrentScene = useStore((s) => s.loopCurrentScene)
+  const setLoopCurrentScene = useStore((s) => s.setLoopCurrentScene)
+  const flyoverEditCamera = useStore((s) => s.flyoverEditCamera)
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const addFlyoverKeyframe = useStore((s) => s.addFlyoverKeyframe)
-  const setFlyoverJumpToStart = useStore((s) => s.setFlyoverJumpToStart)
-
-  if (!scene?.flyover) return null
-
+  const scene = project.scenes[currentSceneIndex]
   const sceneStarts = project.scenes.reduce<number[]>(
     (acc, s, i) => [...acc, (acc[i] ?? 0) + s.durationSeconds],
     [0]
   )
   const sceneStart = sceneStarts[currentSceneIndex] ?? 0
-  const sceneDuration = scene.durationSeconds
+  const sceneDuration = scene?.durationSeconds ?? 0
   const sceneLocalTime = Math.max(0, Math.min(sceneDuration, currentTime - sceneStart))
   const normalizedTime = sceneDuration > 0 ? sceneLocalTime / sceneDuration : 0
-
-  const keyframes = getFlyoverKeyframes(scene)
+  const keyframes = scene ? getFlyoverKeyframes(scene) : []
   const hasKeyframes = keyframes.length > 0
+  const isOnKeyframe = hasKeyframes && keyframes.some((kf) => Math.abs(kf.time - normalizedTime) < KEYFRAME_SNAP_EPS)
 
-  const handleAddKeyframe = () => {
+  const scenesCount = project.scenes.length
+  const hasMultipleScenes = scenesCount > 1
+  const canGoNextScene = currentSceneIndex < scenesCount - 1
+
+  const jumpToNextScene = () => {
+    if (!canGoNextScene) return
+    const next = currentSceneIndex + 1
+    setCurrentSceneIndex(next)
+    setCurrentTime(sceneStarts[next] ?? 0)
+    setPlaying(false)
+  }
+
+  const jumpToSceneStart = () => {
+    setCurrentTime(sceneStarts[currentSceneIndex] ?? 0)
+    setPlaying(false)
+  }
+
+  const handleSetKeyframe = () => {
     const cam = getFlyoverEditCamera()
     if (!cam) return
     addFlyoverKeyframe(currentSceneIndex, {
@@ -365,60 +384,95 @@ function CameraKeyframeButtons() {
     })
   }
 
-  const accent = '#F6F572'
-
-  return (
-    <div className="flex gap-2">
-      <button
-        type="button"
-        onClick={handleAddKeyframe}
-        disabled={!flyoverEditMode}
-        title={flyoverEditMode ? 'Add keyframe at current playhead' : 'Enable fly-around first'}
-        className="flex flex-1 min-w-0 max-w-xs items-center justify-center gap-2 rounded-full border-2 py-2 px-5 text-sm font-medium text-white/80 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 bg-white/10 hover:bg-white/15 disabled:hover:bg-white/10 whitespace-nowrap"
-        style={{ borderColor: 'transparent' }}
-      >
-        <span
-          className="h-2 w-2 shrink-0 rounded-full transition-all duration-200"
-          style={{ backgroundColor: hasKeyframes ? accent : 'rgba(255,255,255,0.4)' }}
-        />
-        Add keyframe
-      </button>
-      <button
-        type="button"
-        onClick={() => setFlyoverJumpToStart(true)}
-        disabled={!flyoverEditMode || !hasKeyframes}
-        title="Move camera to first keyframe"
-        className="shrink-0 rounded-full border-2 border-transparent py-2 px-4 text-sm font-medium text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed bg-white/10 whitespace-nowrap"
-      >
-        Jump to first
-      </button>
-    </div>
-  )
-}
-
-function CameraCoordsDisplay() {
-  const flyoverEditCamera = useStore((s) => s.flyoverEditCamera)
-  const [x, y, z] = flyoverEditCamera?.position ?? [0, 0, 3.5]
+  const [x, y, z] = flyoverEditCamera?.position ?? [0, 0, 2]
   const fmt = (n: number) => n.toFixed(2)
 
+  const btnClass =
+    'w-9 h-9 rounded-md flex items-center justify-center text-sm bg-white/10 hover:bg-white/20 text-white/90 disabled:opacity-50 disabled:pointer-events-none'
+  const btnActiveClass = 'bg-white/20 text-white'
+
   return (
-    <div className="flex items-center gap-2 text-white/50 ml-auto" title="Camera position (x, y, z)">
-      <svg
-        className="h-4 w-4 shrink-0 opacity-70"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        viewBox="0 0 24 24"
-        aria-hidden
+    <div
+      className="flex flex-wrap items-center justify-center gap-2 w-full max-w-2xl mx-auto px-3 py-2 rounded-lg border border-white/10 bg-zinc-900/95 shadow-xl lg:max-w-3xl lg:px-4 lg:py-3"
+      role="toolbar"
+      aria-label="Playback and camera"
+    >
+      <button
+        type="button"
+        onClick={() => setPlaying(!isPlaying)}
+        className={btnClass}
+        title={isPlaying ? 'Pause' : 'Play'}
       >
-        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-        <circle cx="12" cy="13" r="4" />
-      </svg>
-      <span className="font-mono text-xs tabular-nums">
-        {fmt(x)}, {fmt(y)}, {fmt(z)}
-      </span>
+        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+      </button>
+      <button
+        type="button"
+        onClick={() => setLoopCurrentScene(!loopCurrentScene)}
+        className={`${btnClass} ${loopCurrentScene ? btnActiveClass : 'text-white/60'}`}
+        title={loopCurrentScene ? 'Loop current scene (on)' : 'Loop current scene (off)'}
+      >
+        <Repeat className="w-4 h-4" />
+      </button>
+      {hasMultipleScenes && (
+        <button
+          type="button"
+          onClick={jumpToNextScene}
+          disabled={!canGoNextScene}
+          className={btnClass}
+          title="Jump to next scene"
+        >
+          <SkipForward className="w-4 h-4" />
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={jumpToSceneStart}
+        className={btnClass}
+        title="Jump to start of current scene"
+      >
+        <SkipBack className="w-4 h-4" />
+      </button>
+
+      {scene?.flyover && (
+        <>
+          <div className="w-px h-6 bg-white/10" aria-hidden />
+          <button
+            type="button"
+            onClick={handleSetKeyframe}
+            disabled={!flyoverEditMode}
+            title={flyoverEditMode ? 'Set camera keyframe at playhead' : 'Enable fly-around to add keyframes'}
+            className="flex items-center justify-center gap-2 rounded-md py-2 px-3 text-xs font-medium text-white/80 bg-white/10 hover:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            <span
+              className="h-2 w-2 rounded-full shrink-0 transition-colors"
+              style={{
+                backgroundColor: isOnKeyframe ? '#F6F572' : hasKeyframes ? 'rgba(246,245,114,0.6)' : 'rgba(255,255,255,0.4)',
+              }}
+              title={isOnKeyframe ? 'Playhead on a keyframe' : hasKeyframes ? 'Scene has keyframes' : 'No keyframes yet'}
+            />
+            Set keyframe
+          </button>
+        </>
+      )}
+
+      <div className="flex items-center gap-2 text-white/50 ml-auto" title="Camera position (x, y, z)">
+        <svg
+          className="h-4 w-4 shrink-0 opacity-70"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          viewBox="0 0 24 24"
+          aria-hidden
+        >
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+          <circle cx="12" cy="13" r="4" />
+        </svg>
+        <span className="font-mono text-xs tabular-nums">
+          {fmt(x)}, {fmt(y)}, {fmt(z)}
+        </span>
+      </div>
     </div>
   )
 }
@@ -491,6 +545,7 @@ function ExportButton() {
   const [content, setContent] = useState<'full' | 'plane-only'>('full')
   const [resolution, setResolution] = useState(720)
   const [frameByFrame, setFrameByFrame] = useState(false)
+  const [exportPerScene, setExportPerScene] = useState(false)
   const setExporting = useStore((s) => s.setExporting)
   const setExportRenderMode = useStore((s) => s.setExportRenderMode)
   const setExportHeight = useStore((s) => s.setExportHeight)
@@ -505,9 +560,6 @@ function ExportButton() {
     setExportHeight(resolution)
     setExporting(true)
     setExportDialogOpen(false)
-    setCurrentSceneIndex(0)
-    setCurrentTime(0)
-    const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
     const useFrameByFrame = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD || frameByFrame
     if (!useFrameByFrame) setPlaying(true)
     // Let canvas remount with alpha if plane-only
@@ -523,43 +575,112 @@ function ExportButton() {
     const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
       ? 'video/webm;codecs=vp9'
       : 'video/webm'
-    const recorder = new MediaRecorder(stream, {
-      mimeType: mime,
-      videoBitsPerSecond: bitrate,
-      audioBitsPerSecond: 0,
-    })
-    const chunks: Blob[] = []
-    recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      const suffix = content === 'plane-only' ? '-panel' : ''
-      a.download = `${project.name || 'export'}${suffix}.webm`
-      a.click()
-      URL.revokeObjectURL(a.href)
-      setExporting(false)
-      setExportRenderMode('full')
-      setPlaying(false)
+    const suffix = content === 'plane-only' ? '-panel' : ''
+    const baseName = project.name || 'export'
+
+    const recordSegment = async (
+      startTime: number,
+      durationSeconds: number,
+      downloadName: string
+    ): Promise<void> => {
+      setCurrentSceneIndex(sceneIndexAtTime(project.scenes, startTime))
+      setCurrentTime(startTime)
+      await new Promise((r) => setTimeout(r, 50))
+      const recorder = new MediaRecorder(stream, {
+        mimeType: mime,
+        videoBitsPerSecond: bitrate,
+        audioBitsPerSecond: 0,
+      })
+      const chunks: Blob[] = []
+      recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+      recorder.start(100)
+      if (useFrameByFrame) {
+        const frameDurationMs = 1000 / framerate
+        const segmentFrames = Math.ceil(durationSeconds * framerate)
+        for (let i = 0; i < segmentFrames; i++) {
+          const frameStart = performance.now()
+          const t = startTime + Math.min(i / framerate, durationSeconds)
+          setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
+          setCurrentTime(t)
+          await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+          const elapsed = performance.now() - frameStart
+          const wait = Math.max(0, frameDurationMs - elapsed)
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+        }
+      } else {
+        await new Promise((r) => setTimeout(r, durationSeconds * 1000 + 500))
+      }
+      recorder.stop()
+      await new Promise<void>((resolve) => {
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'video/webm' })
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = downloadName
+          a.click()
+          URL.revokeObjectURL(a.href)
+          resolve()
+        }
+      })
     }
-    recorder.start(100)
-    if (useFrameByFrame) {
-      const frameDurationMs = 1000 / framerate
-      const totalFrames = Math.ceil(totalDuration * framerate)
-      for (let i = 0; i < totalFrames; i++) {
-        const frameStart = performance.now()
-        const t = Math.min(i / framerate, totalDuration)
-        setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
-        setCurrentTime(t)
-        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
-        const elapsed = performance.now() - frameStart
-        const wait = Math.max(0, frameDurationMs - elapsed)
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+
+    if (exportPerScene && project.scenes.length > 1) {
+      let sceneStartTime = 0
+      for (let i = 0; i < project.scenes.length; i++) {
+        const scene = project.scenes[i]
+        await recordSegment(
+          sceneStartTime,
+          scene.durationSeconds,
+          `${baseName}${suffix}-scene-${i + 1}.webm`
+        )
+        sceneStartTime += scene.durationSeconds
       }
     } else {
-      await new Promise((r) => setTimeout(r, totalDuration * 1000 + 500))
+      setCurrentSceneIndex(0)
+      setCurrentTime(0)
+      const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
+      const recorder = new MediaRecorder(stream, {
+        mimeType: mime,
+        videoBitsPerSecond: bitrate,
+        audioBitsPerSecond: 0,
+      })
+      const chunks: Blob[] = []
+      recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' })
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `${baseName}${suffix}.webm`
+        a.click()
+        URL.revokeObjectURL(a.href)
+        setExporting(false)
+        setExportRenderMode('full')
+        setPlaying(false)
+      }
+      recorder.start(100)
+      if (useFrameByFrame) {
+        const frameDurationMs = 1000 / framerate
+        const totalFrames = Math.ceil(totalDuration * framerate)
+        for (let i = 0; i < totalFrames; i++) {
+          const frameStart = performance.now()
+          const t = Math.min(i / framerate, totalDuration)
+          setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
+          setCurrentTime(t)
+          await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+          const elapsed = performance.now() - frameStart
+          const wait = Math.max(0, frameDurationMs - elapsed)
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+        }
+      } else {
+        await new Promise((r) => setTimeout(r, totalDuration * 1000 + 500))
+      }
+      recorder.stop()
+      return
     }
-    recorder.stop()
+
+    setExporting(false)
+    setExportRenderMode('full')
+    setPlaying(false)
   }
 
   return (
@@ -586,6 +707,9 @@ function ExportButton() {
           content={content}
           setContent={setContent}
           hasPlaneMedia={hasPlaneMedia}
+          exportPerScene={exportPerScene}
+          setExportPerScene={setExportPerScene}
+          sceneCount={project.scenes.length}
           onClose={() => setExportDialogOpen(false)}
           onExport={runExport}
         />

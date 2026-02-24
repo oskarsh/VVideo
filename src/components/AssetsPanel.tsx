@@ -4,6 +4,11 @@ import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
 import { VideoThumbnail } from './VideoThumbnail'
 import { getPanesForRender } from '@/types'
 
+/** Example background videos in public/example-assets/Background/ (1.mp4 … 4.mp4). */
+const EXAMPLE_BACKGROUND_PATHS = ['1.mp4', '2.mp4', '3.mp4', '4.mp4'].map(
+  (name) => `/example-assets/Background/${name}`
+)
+
 export function AssetsPanel() {
   const project = useStore((s) => s.project)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
@@ -14,6 +19,7 @@ export function AssetsPanel() {
   const scene = project.scenes[currentSceneIndex]
   const hasVideo = Boolean(project.backgroundVideoUrl)
   const panes = getPanesForRender(project)
+  const texts = scene?.texts ?? []
   const aspectRatio = project.aspectRatio
   const is16x9 = aspectRatio[0] === 16 && aspectRatio[1] === 9
   const is9x16 = aspectRatio[0] === 9 && aspectRatio[1] === 16
@@ -108,9 +114,36 @@ export function AssetsPanel() {
       )}
 
       <div>
+        <span className={smallLabelClass}>Example backgrounds</span>
+        <div className="grid grid-cols-4 gap-1 mt-1">
+          {EXAMPLE_BACKGROUND_PATHS.map((path) => {
+            const isSelected = project.backgroundVideoUrl === path
+            return (
+              <button
+                key={path}
+                type="button"
+                onClick={() => {
+                  setProjectBackgroundVideo(path)
+                  setBackgroundTrim(currentSceneIndex, null)
+                }}
+                className={`w-14 rounded border overflow-hidden bg-black/30 flex shrink-0 focus:outline-none focus:ring-1 focus:ring-white/30 ${isSelected ? 'border-white ring-1 ring-white' : 'border-white/10 hover:border-white/20'
+                  }`}
+              >
+                <VideoThumbnail url={path} time={0} className="border-0 w-full h-full !aspect-video" />
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div>
         <span className={smallLabelClass}>Layers</span>
-        {panes.length === 0 ? (
+        {panes.length === 0 && texts.length === 0 ? (
           <p className="text-xs text-white/40 italic">No layers. Add below.</p>
+        ) : panes.length === 0 ? (
+          <p className="text-xs text-white/40 italic">
+            {texts.length} text layer{texts.length !== 1 ? 's' : ''}. Add video/image below.
+          </p>
         ) : (
           <ul className="space-y-2">
             {panes.map((pane, i) => (

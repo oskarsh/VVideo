@@ -16,6 +16,8 @@ import type {
   SceneEffectVignette,
   SceneEffectScanline,
   SceneEffect,
+  GlitchAlgorithm,
+  ChromaticDirection,
 } from '@/types'
 import { EFFECT_DISPLAY_NAMES } from '@/lib/effectLabels'
 import { inputClass } from '@/constants/ui'
@@ -510,11 +512,15 @@ const DITHER_PRESETS: { value: SceneEffectDither['preset']; label: string }[] = 
   { value: 'custom', label: 'Custom' },
 ]
 
-const DITHER_MODES: { value: SceneEffectDither['mode']; label: string }[] = [
+export const DITHER_MODES: { value: SceneEffectDither['mode']; label: string }[] = [
   { value: 'bayer2', label: 'Bayer 2×2' },
   { value: 'bayer4', label: 'Bayer 4×4' },
   { value: 'bayer8', label: 'Bayer 8×8' },
+  { value: 'bayer16', label: 'Bayer 16×16' },
   { value: 'random', label: 'Random' },
+  { value: 'valueNoise', label: 'Value noise' },
+  { value: 'halftone', label: 'Halftone (dot)' },
+  { value: 'lines', label: 'Line screen' },
 ]
 
 export function DitherControls({
@@ -662,6 +668,13 @@ function ToggleControl({
   return <div className="space-y-3">{children}</div>
 }
 
+const CHROMATIC_DIRECTIONS: { value: ChromaticDirection; label: string }[] = [
+  { value: 'omnidirectional', label: 'Omni' },
+  { value: 'horizontal', label: 'H' },
+  { value: 'vertical', label: 'V' },
+  { value: 'diagonal', label: 'Diag' },
+]
+
 function ChromaticAberrationControls({
   eff,
   sceneIndex,
@@ -677,6 +690,8 @@ function ChromaticAberrationControls({
 }) {
   const offsetStart = eff.offsetStart ?? (eff as { offset?: number }).offset ?? 0.005
   const offsetEnd = eff.offsetEnd ?? (eff as { offset?: number }).offset ?? 0.005
+  const direction = eff.direction ?? 'omnidirectional'
+  const modulationOffset = eff.modulationOffset ?? 0.15
   return (
     <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} sidebarMode={sidebarMode}>
       <div className="space-y-2">
@@ -716,6 +731,22 @@ function ChromaticAberrationControls({
           />
           <span className="text-[10px] text-white/40">{(offsetEnd * 1000).toFixed(1)}</span>
         </label>
+        <div>
+          <span className="text-[10px] text-white/50 uppercase tracking-wider block mb-1.5">Direction</span>
+          <div className="flex flex-wrap gap-1">
+            {CHROMATIC_DIRECTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setEffect(sceneIndex, effectIndex, { direction: value })}
+                className={`px-2 py-1 rounded text-[10px] font-medium ${direction === value ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/15 border border-white/10'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -727,6 +758,23 @@ function ChromaticAberrationControls({
           />
           <span className="text-[11px] text-white/60">Radial (stronger at edges)</span>
         </label>
+        {eff.radialModulation && (
+          <label className="block text-[11px] text-white/50">
+            Edge start (radial)
+            <input
+              type="range"
+              min={0}
+              max={0.5}
+              step={0.05}
+              value={modulationOffset}
+              onChange={(e) =>
+                setEffect(sceneIndex, effectIndex, { modulationOffset: parseFloat(e.target.value) })
+              }
+              className="w-full mt-0.5"
+            />
+            <span className="text-[10px] text-white/40">{modulationOffset.toFixed(2)}</span>
+          </label>
+        )}
       </div>
     </ToggleControl>
   )
@@ -791,9 +839,12 @@ function LensDistortionControls({
   )
 }
 
-const GLITCH_MODES: { value: SceneEffectGlitch['mode']; label: string }[] = [
+const GLITCH_ALGORITHMS: { value: GlitchAlgorithm; label: string }[] = [
   { value: 'sporadic', label: 'Sporadic' },
   { value: 'constantMild', label: 'Constant mild' },
+  { value: 'constantWild', label: 'Constant wild' },
+  { value: 'block', label: 'Block displacement' },
+  { value: 'noise', label: 'Noise burst' },
 ]
 
 // Map speed 0–1 to delay (min, max) in seconds. 0 = slow, 1 = fast.
@@ -836,22 +887,24 @@ function GlitchControls({
   const durationMin = eff.durationMin ?? 0.6
   const speed = delayToSpeed(delayMin)
   const length = durationToLength(durationMin)
+  const algorithm: GlitchAlgorithm =
+    eff.algorithm ?? (eff.mode === 'constantMild' ? 'constantMild' : 'sporadic')
 
   return (
     <ToggleControl eff={eff} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} sidebarMode={sidebarMode}>
       <div className="space-y-2">
         <div>
-          <span className="text-[11px] text-white/50 block mb-1">Mode</span>
+          <span className="text-[11px] text-white/50 block mb-1">Algorithm</span>
           <select
-            value={eff.mode}
+            value={algorithm}
             onChange={(e) =>
               setEffect(sceneIndex, effectIndex, {
-                mode: e.target.value as SceneEffectGlitch['mode'],
+                algorithm: e.target.value as GlitchAlgorithm,
               })
             }
             className={inputClass}
           >
-            {GLITCH_MODES.map(({ value, label }) => (
+            {GLITCH_ALGORITHMS.map(({ value, label }) => (
               <option key={value} value={value} className="bg-zinc-900">
                 {label}
               </option>

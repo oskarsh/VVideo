@@ -27,9 +27,9 @@ input[type='range']::-moz-range-thumb {
 }
 
 input[type='range']::-webkit-slider-runnable-track {
-  @apply bg-transparent;
+  @apply bg-white/10 rounded-full;
 }
 
 input[type='range']::-moz-range-track {
-  @apply bg-transparent;
+  @apply bg-white/10 rounded-full;
 }
