@@ -14,6 +14,15 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '2.0.6',
+    date: '2026-02-25',
+    summary: 'Remove "Animate over scene" pane option.',
+    items: [
+      'Removed the "Animate over scene" checkbox and animation end sliders from the Layers panel.',
+      'Pane position, scale, and rotation are now static per scene; use the keyframe system for animation.',
+    ],
+  },
+  {
     version: '2.0.5',
     date: '2026-02-25',
     summary: 'Fix camera drift when playing with no keyframes.',

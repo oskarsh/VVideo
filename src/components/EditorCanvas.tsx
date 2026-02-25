@@ -466,10 +466,6 @@ function TextPlane3D({ text }: { text: SceneText }) {
   )
 }
 
-function lerpPos(a: [number, number, number], b: [number, number, number], t: number): [number, number, number] {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
-}
-
 function SinglePane({
   pane,
   scene,
@@ -577,6 +573,7 @@ function CameraRig({
 
   useFrame((_state, delta) => {
     if (disabled) return
+    lastHandheldOffsetsRef.current = null // reset when not in edit mode
     let pos: [number, number, number]
     let rot: [number, number, number]
     let fov = FOV_DEG

@@ -10,7 +10,7 @@ Compose scenes with background + panel videos, flyover cameras, timeline automat
 | Feature | Description |
 |--------|-------------|
 | **Scenes** | Cut between multiple scenes; each has a duration, background video/texture, and optional video-on-plane layers. Duplicate, reorder, or clear scenes. |
-| **Multi-layer panes** | Add multiple video or image layers (panes) with individual Z-order, position, scale, rotation, extrusion depth, and per-scene trim. Animate each pane over scene duration. |
+| **Multi-layer panes** | Add multiple video or image layers (panes) with individual Z-order, position, scale, rotation, extrusion depth, and per-scene trim. |
 | **3D flyover camera** | Add camera keyframes at any playhead position; fly with orbit controls; set easing curve between keyframes. Keyframes are draggable on the timeline. |
 | **Global timeline automation** | Keyframe grain, DoF, handheld, chromatic, lens distortion, glitch, vignette, scanlines, dither, and camera FOV on the project timeline. Values interpolate across scenes. |
 | **Presets** | Apply built-in presets (Default, Clean, Cinematic, VHS/Retro, Glitch, High Contrast, Psychedelic, Acid Trip, Dream State) or save and reuse your own. |

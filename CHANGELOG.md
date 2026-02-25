@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.6 — 2026-02-25
+
+**Remove "Animate over scene" pane option.**
+
+- Removed the "Animate over scene" checkbox and animation end sliders from the Layers panel.
+- Pane position, scale, and rotation are now static per scene; use the keyframe system for animation.
+
+---
+
 ## 2.0.5 — 2026-02-25
 
 **Fix camera drift when playing with no keyframes.**
