@@ -15,17 +15,31 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function ReleaseBlock({ release }: { release: ChangelogRelease }) {
+/** SCREENSHOT_PROTOTYPE: add data-screenshot-* for easy capture; grep "SCREENSHOT_PROTOTYPE" to find/remove */
+function ReleaseBlock({
+  release,
+  isLatest,
+}: {
+  release: ChangelogRelease
+  isLatest?: boolean
+}) {
   return (
-    <div className="pb-6 last:pb-0">
+    <div
+      className="pb-6 last:pb-0"
+      {...(isLatest && { 'data-screenshot-release': release.version })}
+    >
       <div className="flex items-baseline gap-2 flex-wrap mb-1.5">
         <span className="text-sm font-semibold text-white font-mono">v{release.version}</span>
         <span className="text-xs text-white/40">{formatDate(release.date)}</span>
       </div>
       <p className="text-white/90 text-sm leading-relaxed mb-2">{release.summary}</p>
-      <ul className="space-y-1.5">
+      <ul className="space-y-1.5" {...(isLatest && { 'data-screenshot-changelog': '' })}>
         {release.items.map((item, i) => (
-          <li key={i} className="flex gap-2 text-sm text-white/70">
+          <li
+            key={i}
+            className="flex gap-2 text-sm text-white/70"
+            {...(isLatest && { 'data-screenshot-item': String(i + 1) })}
+          >
             <span className="text-white/50 shrink-0">·</span>
             <span>{item}</span>
           </li>
@@ -43,7 +57,7 @@ export function ChangelogModal({
   onClose: () => void
 }) {
   return (
-    <Modal open={open} onClose={onClose} contentClassName="bg-zinc-900 border border-white/10 rounded-lg shadow-2xl max-w-md w-full max-h-[85vh] overflow-hidden flex flex-col">
+    <Modal open={open} onClose={onClose} contentClassName="bg-zinc-900 border border-white/10 rounded-lg shadow-2xl max-w-xl w-full max-h-[85vh] overflow-hidden flex flex-col">
       <div className="px-5 pt-5 pb-3 border-b border-white/10 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <VVideoLogo className="h-5 text-white" />
@@ -66,7 +80,7 @@ export function ChangelogModal({
             key={release.version}
             className={index > 0 ? 'pt-4 mt-4 border-t border-white/10' : undefined}
           >
-            <ReleaseBlock release={release} />
+            <ReleaseBlock release={release} isLatest={index === 0} />
           </div>
         ))}
       </div>

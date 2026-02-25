@@ -1,15 +1,8 @@
 import { useRef } from 'react'
 import { useStore } from '@/store'
 import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
+import { EXAMPLE_BACKGROUND_PATHS } from '@/constants/urls'
 import { VideoThumbnail } from './VideoThumbnail'
-
-/** Example background videos in public/example-assets/Background/. */
-const EXAMPLE_BACKGROUND_PATHS = [
-  '/example-assets/Background/dots.webm',
-  '/example-assets/Background/liquid.webm',
-  '/example-assets/Background/triangle.webm',
-  '/example-assets/Background/tunnel-square.webm',
-]
 
 export function AssetsPanel() {
   const project = useStore((s) => s.project)

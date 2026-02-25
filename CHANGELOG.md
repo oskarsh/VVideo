@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.0 — 2026-02-25
+
+**Major release: timeline automation, presets, effects, and more.**
+
+- Timeline automation: keyframe lanes (expandable, draggable markers), curves view, click-to-seek — global effects and camera keyframes live on the project timeline.
+- Preset system: apply Default or built-in presets (Clean, Cinematic, VHS, Glitch, High contrast, Psychedelic, Acid Trip, Dream State); save and reuse your own; presets include global effect keyframes.
+- More effects: five glitch algorithms (Sporadic, Constant mild/wild, Block displacement, Noise burst); eight dither modes (Bayer 2×2–16×16, Random, Value noise, Halftone, Line screen).
+- Export: per-scene export (one WebM per scene), 2K/4K with frame-by-frame rendering, higher bitrates.
+- Text layers: add text via Layers + menu; appears in Layers list with preview; TextPanel for content, font, position, 3D or static mode.
+- Floating transport bar: Play, Loop, scene navigation, camera controls (Save position, Go to first keyframe), live camera coordinates.
+- Camera UX: handheld shake works without flyover keyframes; play keeps camera position when no keyframes; global FOV track for zoom/wide-angle.
+- Example assets: click-to-use backgrounds and clips in sidebar; Load examples button; works on GitHub Pages.
+- UI polish: Lucide icons replace emojis; style system (emerald for primary, neutral for secondary); drop zones for layers; minimal, consistent look.
+
+---
+
 ## 1.12.25 — 2026-02-25
 
 **Handheld camera shake now works without flyover keyframes.**

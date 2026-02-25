@@ -2,16 +2,10 @@ import { useRef, useState, useEffect } from 'react'
 import { X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useStore } from '@/store'
 import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
+import { EXAMPLE_CLIP_PATHS } from '@/constants/urls'
 import { parseNum, clamp } from '@/utils/numbers'
 import type { Pane, PlaneMedia, SceneText } from '@/types'
 import { VideoThumbnail } from './VideoThumbnail'
-
-/** Example clip videos in public/example-assets/clips/. */
-const EXAMPLE_CLIP_PATHS = [
-  '/example-assets/clips/RAUSCH-screen.webm',
-  '/example-assets/clips/ko.webm',
-  '/example-assets/clips/reach.webm',
-]
 
 function getMediaTypeFromFile(file: File): 'video' | 'image' {
   if (file.type.startsWith('video/')) return 'video'
