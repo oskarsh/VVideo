@@ -33,6 +33,19 @@ function ReleaseBlock({
         <span className="text-xs text-white/40">{formatDate(release.date)}</span>
       </div>
       <p className="text-white/90 text-sm leading-relaxed mb-2">{release.summary}</p>
+      {release.screenshotPath && (
+        <div className="mb-2 rounded-lg overflow-hidden border border-white/10">
+          <img
+            src={release.screenshotPath}
+            alt=""
+            className="w-full h-auto max-h-48 object-contain bg-black/30"
+            loading="lazy"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+        </div>
+      )}
       <ul className="space-y-1.5" {...(isLatest && { 'data-screenshot-changelog': '' })}>
         {release.items.map((item, i) => (
           <li

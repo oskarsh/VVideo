@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState } from 'react'
-import { Play, Pause, Repeat, SkipForward, SkipBack } from 'lucide-react'
+import { Play, Pause, Repeat, SkipForward, SkipBack, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useStore } from '@/store'
+import { DEFAULT_GLOBAL_KEYFRAMES } from '@/lib/globalEffects'
+import type { GlobalEffectKeyframeDither } from '@/types'
 import { useLayout } from '@/context/LayoutContext'
 import { EditorCanvas } from '@/components/EditorCanvas'
 import { Sidebar } from '@/components/Sidebar'
@@ -226,6 +228,18 @@ export default function App() {
     setContentRef(contentRef.current)
     return () => setContentRef(null)
   }, [setContentRef])
+
+  /** SCREENSHOT_PROTOTYPE: when ?screenshot=2.0.8, add keyframes so timeline shows keyframe lane */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const version = params.get('screenshot')
+    if (version !== '2.0.8') return
+    const { setGlobalEffectTrack } = useStore.getState()
+    const def = DEFAULT_GLOBAL_KEYFRAMES.dither as GlobalEffectKeyframeDither
+    const kf1: GlobalEffectKeyframeDither = { ...def, time: 0 }
+    const kf2: GlobalEffectKeyframeDither = { ...def, time: 1.5 }
+    setGlobalEffectTrack('dither', { enabled: true, keyframes: [kf1, kf2] })
+  }, [])
   useEffect(() => {
     setPreviewRef(previewRef.current)
     return () => setPreviewRef(null)
@@ -352,6 +366,7 @@ function FloatingTransportBar() {
   const flyoverEditCamera = useStore((s) => s.flyoverEditCamera)
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const addFlyoverKeyframe = useStore((s) => s.addFlyoverKeyframe)
+  const setSelectedCameraKeyframe = useStore((s) => s.setSelectedCameraKeyframe)
   const scene = project.scenes[currentSceneIndex]
   const sceneStarts = project.scenes.reduce<number[]>(
     (acc, s, i) => [...acc, (acc[i] ?? 0) + s.durationSeconds],
@@ -380,6 +395,33 @@ function FloatingTransportBar() {
   const jumpToSceneStart = () => {
     setCurrentTime(sceneStarts[currentSceneIndex] ?? 0)
     setPlaying(false)
+  }
+
+  // Camera keyframes for current scene only (normalized 0..1)
+  const sceneKeyframes = keyframes
+  const canPrevKeyframe = hasKeyframes && sceneKeyframes.some((kf) => kf.time < normalizedTime - KEYFRAME_SNAP_EPS)
+  const canNextKeyframe = hasKeyframes && sceneKeyframes.some((kf) => kf.time > normalizedTime + KEYFRAME_SNAP_EPS)
+
+  const jumpToPrevKeyframe = () => {
+    if (!canPrevKeyframe || !scene) return
+    const prev = [...sceneKeyframes].reverse().find((kf) => kf.time < normalizedTime - KEYFRAME_SNAP_EPS)
+    if (!prev) return
+    const projectTime = sceneStart + prev.time * sceneDuration
+    setCurrentTime(projectTime)
+    setCurrentSceneIndex(currentSceneIndex)
+    setPlaying(false)
+    setSelectedCameraKeyframe({ sceneIndex: currentSceneIndex, time: projectTime })
+  }
+
+  const jumpToNextKeyframe = () => {
+    if (!canNextKeyframe || !scene) return
+    const next = sceneKeyframes.find((kf) => kf.time > normalizedTime + KEYFRAME_SNAP_EPS)
+    if (!next) return
+    const projectTime = sceneStart + next.time * sceneDuration
+    setCurrentTime(projectTime)
+    setCurrentSceneIndex(currentSceneIndex)
+    setPlaying(false)
+    setSelectedCameraKeyframe({ sceneIndex: currentSceneIndex, time: projectTime })
   }
 
   const handleSetKeyframe = () => {
@@ -445,6 +487,28 @@ function FloatingTransportBar() {
       {scene?.flyover && (
         <>
           <div className="w-px h-6 bg-white/10" aria-hidden />
+          {hasKeyframes && (
+            <>
+              <button
+                type="button"
+                onClick={jumpToPrevKeyframe}
+                disabled={!canPrevKeyframe}
+                className={btnClass}
+                title="Previous camera keyframe"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={jumpToNextKeyframe}
+                disabled={!canNextKeyframe}
+                className={btnClass}
+                title="Next camera keyframe"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={handleSetKeyframe}

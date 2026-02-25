@@ -512,8 +512,8 @@ function CameraRig({
   disabled,
   handheldOverride,
   fovOverride,
-  /** When true, handheld shake uses real elapsed time so it animates in preview when paused. */
-  handheldLivePreview,
+  /** When true, handheld shake is applied (only during playback or export). */
+  handheldActive,
 }: {
   sceneData: SceneType
   time: number
@@ -523,18 +523,12 @@ function CameraRig({
   handheldOverride?: { intensity: number; rotationShake: number; speed: number; enabled: boolean }
   /** When set (from global camera effect), override camera FOV. */
   fovOverride?: number
-  /** When true, handheld shake uses real elapsed time so it animates in preview when paused. */
-  handheldLivePreview?: boolean
+  /** When true, handheld shake is applied (only during playback or export). */
+  handheldActive?: boolean
 }) {
   const { camera } = useThree()
-  const handheldElapsedRef = useRef(0)
   /** When no flyover keyframes, store base pos/rot so handheld doesn't accumulate. */
   const baseNoKeyframesRef = useRef<{
-    position: [number, number, number]
-    rotation: [number, number, number]
-  } | null>(null)
-  /** When disabled (edit mode), store last handheld offsets to extract base from camera. */
-  const lastHandheldOffsetsRef = useRef<{
     position: [number, number, number]
     rotation: [number, number, number]
   } | null>(null)
@@ -571,9 +565,8 @@ function CameraRig({
       Number.isFinite(speed)
     )
 
-  useFrame((_state, delta) => {
+  useFrame((_state, _delta) => {
     if (disabled) return
-    lastHandheldOffsetsRef.current = null // reset when not in edit mode
     let pos: [number, number, number]
     let rot: [number, number, number]
     let fov = FOV_DEG
@@ -624,16 +617,8 @@ function CameraRig({
     }
     if (!pos.every(Number.isFinite) || !rot.every(Number.isFinite)) return
 
-    let handheldTime = time
-    if (handheldOn && handheldLivePreview) {
-      handheldElapsedRef.current += delta
-      handheldTime = handheldElapsedRef.current
-    } else if (!handheldOn) {
-      handheldElapsedRef.current = 0
-    }
-
-    if (handheldOn) {
-      const offsets = getHandheldOffsets(handheldTime, intensity, rotationShake, speed)
+    if (handheldOn && handheldActive) {
+      const offsets = getHandheldOffsets(time, intensity, rotationShake, speed)
       pos = [
         pos[0] + offsets.position[0],
         pos[1] + offsets.position[1],
@@ -1123,7 +1108,7 @@ function SceneContent() {
         time={sceneLocalTime}
         duration={sceneDuration}
         disabled={editControlsActive}
-        handheldLivePreview={!isPlaying && !isExporting}
+        handheldActive={isPlaying || isExporting}
         fovOverride={globalCamera != null && (globalCamera.enabled !== false) ? (globalCamera.fov as number) : undefined}
         handheldOverride={
           globalHandheld != null

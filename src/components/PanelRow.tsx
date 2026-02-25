@@ -9,6 +9,7 @@ export function PanelRow({
   onClick,
   showToggle = true,
   toggleDisabled = false,
+  dataScreenshotOpen,
 }: {
   title: string
   enabled: boolean
@@ -16,6 +17,8 @@ export function PanelRow({
   onClick: () => void
   showToggle?: boolean
   toggleDisabled?: boolean
+  /** SCREENSHOT_PROTOTYPE: selector for capture script to open this panel */
+  dataScreenshotOpen?: string
 }) {
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -34,6 +37,7 @@ export function PanelRow({
         }
       }}
       className="flex cursor-pointer items-center gap-2 border-b border-white/10 py-2 last:border-b-0 hover:bg-white/5"
+      {...(dataScreenshotOpen && { 'data-screenshot-open': dataScreenshotOpen })}
     >
       {showToggle && (
         <button

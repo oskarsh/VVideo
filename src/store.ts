@@ -134,6 +134,9 @@ interface EditorState {
   /** When true, canvas snaps camera to start keyframe once then clears. */
   flyoverJumpToStart: boolean
   setFlyoverJumpToStart: (v: boolean) => void
+  /** Selected camera keyframe (highlighted in timeline); set when jumping via transport bar or clicking marker. */
+  selectedCameraKeyframe: { sceneIndex: number; time: number } | null
+  setSelectedCameraKeyframe: (v: { sceneIndex: number; time: number } | null) => void
   /** When true, timeline shows automation curves for effect keyframes (start/end params). */
   timelineShowAutomation: boolean
   setTimelineShowAutomation: (v: boolean) => void
@@ -719,6 +722,8 @@ export const useStore = create<EditorState>((set) => ({
   setFlyoverEditCamera: (v) => set({ flyoverEditCamera: v }),
   flyoverJumpToStart: false,
   setFlyoverJumpToStart: (v) => set({ flyoverJumpToStart: v }),
+  selectedCameraKeyframe: null,
+  setSelectedCameraKeyframe: (v) => set({ selectedCameraKeyframe: v }),
   timelineShowAutomation: false,
   setTimelineShowAutomation: (v) => set({ timelineShowAutomation: v }),
   projectFps: 30,

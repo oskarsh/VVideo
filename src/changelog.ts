@@ -8,11 +8,34 @@ export type ChangelogRelease = {
   date: string // YYYY-MM-DD
   summary: string
   items: string[]
+  /** SCREENSHOT_PROTOTYPE: path to screenshot (e.g. /screenshots/changelog-2.0.8/screenshot.png) when captured */
+  screenshotPath?: string
 }
 
 export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
+  {
+    version: '2.0.8',
+    date: '2026-02-25',
+    summary: 'Timeline keyframe selection and highlight.',
+    screenshotPath: '/screenshots/changelog-2.0.8/screenshot.png',
+    items: [
+      'Click a keyframe marker to select it and jump the playhead to that time.',
+      'Selected keyframes are highlighted with a white ring.',
+      'Selection clears when scrubbing elsewhere or clicking the lane background.',
+    ],
+  },
+  {
+    version: '2.0.7',
+    date: '2026-02-25',
+    summary: 'Handheld shake only during playback; prev/next camera keyframe buttons.',
+    items: [
+      'Handheld camera shake is no longer shown in the preview when paused.',
+      'Shake only applies when the scene is playing or during export.',
+      'Floating bar: prev/next buttons to jump between camera keyframes; selected keyframe highlights in timeline.',
+    ],
+  },
   {
     version: '2.0.6',
     date: '2026-02-25',
@@ -35,6 +58,7 @@ export const changelogReleases: ChangelogRelease[] = [
     version: '2.0.4',
     date: '2026-02-25',
     summary: 'Depth of field: focus distance and focus range now work correctly.',
+    screenshotPath: '/screenshots/changelog-2.0.4/screenshot.png',
     items: [
       'Focus distance and focus range sliders now have visible impact on the blur (were scaled incorrectly for world units).',
       'Removed redundant focal length slider (it mapped to the same parameter as focus range in the effect).',

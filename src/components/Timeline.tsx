@@ -275,6 +275,8 @@ export function Timeline() {
   const updateFlyoverKeyframe = useStore((s) => s.updateFlyoverKeyframe)
   const removeGlobalEffectKeyframe = useStore((s) => s.removeGlobalEffectKeyframe)
   const removeFlyoverKeyframe = useStore((s) => s.removeFlyoverKeyframe)
+  const selectedCameraKeyframe = useStore((s) => s.selectedCameraKeyframe)
+  const setSelectedCameraKeyframe = useStore((s) => s.setSelectedCameraKeyframe)
 
   const [automationDrag, setAutomationDrag] = useState<{
     curve: AutomationCurve
@@ -286,6 +288,13 @@ export function Timeline() {
 
   /** Which keyframe lane is expanded (global effect markers vs camera markers). Click lane to select. */
   const [expandedKeyframeLane, setExpandedKeyframeLane] = useState<'global' | 'camera' | null>(null)
+
+  /** Selected keyframe (highlighted); click marker to select and seek. Cleared when scrubbing elsewhere. */
+  const [selectedKeyframe, setSelectedKeyframe] = useState<
+    | { kind: 'global'; effectType: GlobalEffectType; time: number }
+    | { kind: 'camera'; sceneIndex: number; time: number }
+    | null
+  >(null)
 
   /** Dragging a keyframe horizontally to change its time. initialTime = project time for seek-on-click. */
   const [keyframeDrag, setKeyframeDrag] = useState<
@@ -304,6 +313,8 @@ export function Timeline() {
 
   const handleScrub = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      setSelectedKeyframe(null)
+      setSelectedCameraKeyframe(null)
       const rect = (trackRef.current ?? e.currentTarget).getBoundingClientRect()
       const x = (e.clientX - rect.left) / rect.width
       const t = Math.max(0, Math.min(totalDuration, x * totalDuration))
@@ -314,7 +325,7 @@ export function Timeline() {
       })
       if (idx >= 0) setCurrentSceneIndex(idx)
     },
-    [totalDuration, sceneStarts, setCurrentTime, setCurrentSceneIndex]
+    [totalDuration, sceneStarts, setCurrentTime, setCurrentSceneIndex, setSelectedCameraKeyframe]
   )
 
   const rulerTicks = getRulerTicks(totalDuration)
@@ -403,7 +414,12 @@ export function Timeline() {
     const onUp = () => {
       if (keyframeDrag && !keyframeDrag.hasMoved) {
         setCurrentTime(keyframeDrag.initialTime)
-        if (keyframeDrag.kind === 'camera') setCurrentSceneIndex(keyframeDrag.sceneIndex)
+        if (keyframeDrag.kind === 'camera') {
+          setCurrentSceneIndex(keyframeDrag.sceneIndex)
+          setSelectedCameraKeyframe({ sceneIndex: keyframeDrag.sceneIndex, time: keyframeDrag.initialTime })
+        } else {
+          setSelectedKeyframe({ kind: 'global', effectType: keyframeDrag.effectType, time: keyframeDrag.initialTime })
+        }
       }
       setKeyframeDrag(null)
     }
@@ -413,7 +429,7 @@ export function Timeline() {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [keyframeDrag, totalDuration, sceneStarts, project.scenes, project.globalEffects, updateGlobalEffectKeyframe, updateFlyoverKeyframe, setCurrentTime, setCurrentSceneIndex])
+  }, [keyframeDrag, totalDuration, sceneStarts, project.scenes, project.globalEffects, updateGlobalEffectKeyframe, updateFlyoverKeyframe, setCurrentTime, setCurrentSceneIndex, setSelectedCameraKeyframe])
 
   const curvesPerScene = project.scenes.map((sc, i) => getSceneAutomationCurves(sc, i))
   const maxLanes = Math.max(1, ...curvesPerScene.map((c) => c.length))
@@ -476,7 +492,7 @@ export function Timeline() {
   }
 
   return (
-    <div className="flex flex-col min-w-0 overflow-x-hidden border-t border-white/10 bg-zinc-900/95">
+    <div className="flex flex-col min-w-0 overflow-x-hidden border-t border-white/10 bg-zinc-900/95" data-screenshot-target="timeline">
       {/* Transport */}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-white/10 min-w-0">
         <button
@@ -675,11 +691,13 @@ export function Timeline() {
             <div
               role="button"
               tabIndex={0}
+              data-screenshot-target="timeline-keyframes"
               className={`rounded border border-white/5 relative flex items-center transition-all duration-200 cursor-pointer ${expandedKeyframeLane === 'global' ? 'ring-1 ring-cyan-400/50 z-10' : ''}`}
               style={{ minHeight: expandedKeyframeLane === 'global' ? KEYFRAME_LANE_HEIGHT_EXPANDED : KEYFRAME_LANE_HEIGHT_COLLAPSED }}
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest('[data-keyframe-marker]')) return
                 e.stopPropagation()
+                setSelectedKeyframe(null)
                 setExpandedKeyframeLane((prev) => (prev === 'global' ? null : 'global'))
               }}
               onKeyDown={(e) => {
@@ -694,12 +712,19 @@ export function Timeline() {
               {globalKeyframeMarkers.map(({ time, type }, idx) => {
                 const track = project.globalEffects?.[type]
                 const kfIndex = track?.keyframes.findIndex((k) => Math.abs(k.time - time) < KEYFRAME_DRAG_TIME_EPS) ?? -1
+                const isSelected =
+                  selectedKeyframe?.kind === 'global' &&
+                  selectedKeyframe.effectType === type &&
+                  Math.abs(selectedKeyframe.time - time) < KEYFRAME_DRAG_TIME_EPS
                 return (
                   <button
                     key={`${type}-${time}-${idx}`}
                     type="button"
                     data-keyframe-marker
-                    className="absolute w-2 h-2 rounded-full bg-cyan-500/90 hover:bg-cyan-400 hover:scale-125 z-10 border border-white/30 -translate-x-1/2 cursor-grab active:cursor-grabbing"
+                    className={`absolute w-2 h-2 rounded-full -translate-x-1/2 cursor-grab active:cursor-grabbing z-10 border ${isSelected
+                        ? 'bg-cyan-400 ring-2 ring-white scale-125'
+                        : 'bg-cyan-500/90 hover:bg-cyan-400 hover:scale-125 border-white/30'
+                      }`}
                     style={{ left: `${(time / totalDuration) * 100}%` }}
                     onMouseDown={(e) => {
                       e.preventDefault()
@@ -711,9 +736,12 @@ export function Timeline() {
                     onDoubleClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      if (kfIndex >= 0) removeGlobalEffectKeyframe(type, kfIndex)
+                      if (kfIndex >= 0) {
+                        removeGlobalEffectKeyframe(type, kfIndex)
+                        if (isSelected) setSelectedKeyframe(null)
+                      }
                     }}
-                    title={`${globalEffectLabel[type]} @ ${formatTime(time)} — drag to move, double-click to remove`}
+                    title={`${globalEffectLabel[type]} @ ${formatTime(time)} — click to select & seek, drag to move, double-click to remove`}
                   />
                 )
               })}
@@ -729,6 +757,8 @@ export function Timeline() {
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest('[data-keyframe-marker]')) return
                 e.stopPropagation()
+                setSelectedKeyframe(null)
+                setSelectedCameraKeyframe(null)
                 setExpandedKeyframeLane((prev) => (prev === 'camera' ? null : 'camera'))
               }}
               onKeyDown={(e) => {
@@ -747,12 +777,19 @@ export function Timeline() {
                 const normalizedTime = (projectTime - sceneStart) / duration
                 const kfs = scene?.flyover?.keyframes ?? []
                 const kfIndex = kfs.findIndex((k) => Math.abs(k.time - normalizedTime) < KEYFRAME_DRAG_TIME_EPS)
+                const isSelected =
+                  selectedCameraKeyframe != null &&
+                  selectedCameraKeyframe.sceneIndex === sceneIndex &&
+                  Math.abs(selectedCameraKeyframe.time - projectTime) < KEYFRAME_DRAG_TIME_EPS
                 return (
                   <button
                     key={`cam-${sceneIndex}-${projectTime}-${idx}`}
                     type="button"
                     data-keyframe-marker
-                    className="absolute w-2 h-2 rounded-full bg-amber-400/90 hover:bg-amber-300 hover:scale-125 z-10 border border-white/30 -translate-x-1/2 cursor-grab active:cursor-grabbing"
+                    className={`absolute w-2 h-2 rounded-full -translate-x-1/2 cursor-grab active:cursor-grabbing z-10 border ${isSelected
+                        ? 'bg-amber-300 ring-2 ring-white scale-125'
+                        : 'bg-amber-400/90 hover:bg-amber-300 hover:scale-125 border-white/30'
+                      }`}
                     style={{ left: `${(projectTime / totalDuration) * 100}%` }}
                     onMouseDown={(e) => {
                       e.preventDefault()
@@ -764,9 +801,12 @@ export function Timeline() {
                     onDoubleClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      if (kfIndex >= 0) removeFlyoverKeyframe(sceneIndex, kfIndex)
+                      if (kfIndex >= 0) {
+                        removeFlyoverKeyframe(sceneIndex, kfIndex)
+                        if (isSelected) setSelectedCameraKeyframe(null)
+                      }
                     }}
-                    title={`Camera @ ${formatTime(projectTime)} — drag to move, double-click to remove`}
+                    title={`Camera @ ${formatTime(projectTime)} — click to select & seek, drag to move, double-click to remove`}
                   />
                 )
               })}

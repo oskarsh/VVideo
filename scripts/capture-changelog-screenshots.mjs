@@ -1,74 +1,99 @@
 #!/usr/bin/env node
 /**
- * Capture screenshots of the latest changelog release for docs.
- * Run: npm run capture-changelog (with dev server running on :5173)
+ * Capture one screenshot per changelog release for visual components.
+ * Run: BASE_URL=http://localhost:4173 npm run capture-changelog
  *
  * SCREENSHOT_PROTOTYPE: remove with ChangelogModal data attributes
+ *
+ * Last 5 releases analysis (visual only):
+ * - 2.0.8: Timeline keyframe selection → timeline with keyframes
+ * - 2.0.7: Handheld shake behavior → skip (not visual)
+ * - 2.0.6: Removed Animate over scene → skip (removal)
+ * - 2.0.5: Fix camera drift → skip (bug fix)
+ * - 2.0.4: Depth of field focus → DoF panel
  */
 import { chromium } from 'playwright'
 import fs from 'fs'
 import path from 'path'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5173'
-const OUTPUT_DIR = 'docs/screenshots/changelog-2.0.0'
+const OUTPUT_BASE = 'public/screenshots'
+
+/** Version → { selector, setup: async (page) => void } */
+const SCREENSHOT_TARGETS = {
+  '2.0.8': {
+    selector: '[data-screenshot-target="timeline-keyframes"]',
+    fallbackSelector: '[data-screenshot-target="timeline"]',
+    async setup(page) {
+      await page.goto(`${BASE_URL}?screenshot=2.0.8`, { waitUntil: 'load', timeout: 30000 })
+      await page.waitForSelector('[data-screenshot-target="timeline"]', { timeout: 25000, state: 'attached' })
+      await new Promise((r) => setTimeout(r, 500))
+      const kfLane = await page.$('[data-screenshot-target="timeline-keyframes"]')
+      if (kfLane) {
+        await kfLane.click()
+        await new Promise((r) => setTimeout(r, 400))
+      }
+    },
+  },
+  '2.0.4': {
+    selector: '[data-screenshot-target="dof-panel"]',
+    async setup(page) {
+      await page.goto(BASE_URL, { waitUntil: 'load', timeout: 30000 })
+      await page.waitForSelector('[data-screenshot-open="dof"]', { timeout: 25000, state: 'attached' })
+      await page.click('[data-screenshot-open="dof"]')
+      await page.waitForSelector('[data-screenshot-target="dof-panel"]', { timeout: 5000 })
+      await new Promise((r) => setTimeout(r, 200))
+    },
+  },
+}
 
 async function main() {
   const browser = await chromium.launch({
-    args: ['--use-gl=egl', '--enable-gpu'],
-    headless: process.env.HEADED ? false : true, // HEADED=1 for visible browser
+    headless: false, // headed by default so WebGL renders correctly
   })
   const context = await browser.newContext({
-    viewport: { width: 1280, height: 900 },
-    deviceScaleFactor: 2, // sharper screenshots
+    viewport: { width: 1280, height: 1100 },
+    deviceScaleFactor: 2,
   })
-  const page = await context.newPage()
 
-  // Skip Welcome modal; don't set changelog-seen so changelog auto-opens for new version
   await context.addInitScript(() => {
     localStorage.setItem('vvideo-welcome-seen', '1')
-    localStorage.setItem('vvideo-changelog-seen', '1.0.0') // old version = changelog auto-shows
+    localStorage.setItem('vvideo-changelog-seen', '2.0.8') // prevent changelog auto-open
   })
 
-  console.log('Navigating to', BASE_URL)
-  await page.goto(BASE_URL, { waitUntil: 'load', timeout: 20000 })
-  // Wait for React to mount (header appears when app is ready)
-  // Changelog auto-opens when version is new (we cleared changelog-seen in init)
-  await page.waitForSelector('[data-screenshot-changelog]', { timeout: 25000 })
-  await new Promise((r) => setTimeout(r, 500)) // stabilize
+  const page = await context.newPage()
 
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true })
+  for (const [version, config] of Object.entries(SCREENSHOT_TARGETS)) {
+    const outDir = path.join(OUTPUT_BASE, `changelog-${version}`)
+    fs.mkdirSync(outDir, { recursive: true })
+    const outPath = path.join(outDir, 'screenshot.png')
 
-  // Full page screenshot (changelog modal overlays the app)
-  await page.screenshot({ path: path.join(OUTPUT_DIR, 'modal.png') })
-  console.log('  modal.png')
-
-  // Screenshot each item (li elements in the changelog list)
-  const items = await page.$$('ul[data-screenshot-changelog] li')
-  console.log('  Items found:', items.length)
-
-  for (let i = 0; i < items.length; i++) {
-    const file = path.join(OUTPUT_DIR, `item-${i + 1}.png`)
     try {
-      await items[i].screenshot({ path: file, timeout: 3000 })
-      console.log('  ', file)
-    } catch (e) {
-      console.warn('  Skip item', i + 1, e.message)
-    }
-  }
-
-  // Full release block
-  const releaseBlock = await page.$('[data-screenshot-release]')
-  if (releaseBlock) {
-    try {
-      await releaseBlock.screenshot({ path: path.join(OUTPUT_DIR, 'full-release.png'), timeout: 3000 })
-      console.log('  full-release.png')
-    } catch {
-      // ignore
+      await config.setup(page)
+      const el = await page.$(config.selector) ?? await page.$(config.fallbackSelector || config.selector)
+      if (el) {
+        await el.screenshot({ path: outPath, timeout: 5000 })
+        console.log(`  ${version} → ${outPath}`)
+      } else {
+        console.warn(`  ${version} → selector not found, skipping`)
+        if (process.env.DEBUG) {
+          await page.screenshot({ path: path.join(outDir, '_debug.png') })
+          const html = await page.content()
+          fs.writeFileSync(path.join(outDir, '_debug.html'), html.slice(0, 5000))
+        }
+      }
+    } catch (err) {
+      console.warn(`  ${version} → error:`, err.message)
+      if (process.env.DEBUG) {
+        try {
+          await page.screenshot({ path: path.join(outDir, '_error.png') })
+        } catch {}
+      }
     }
   }
 
   await browser.close()
-  console.log(`Done. ${items.length} items + full release → ${OUTPUT_DIR}`)
+  console.log(`Done. Screenshots in ${OUTPUT_BASE}/`)
 }
 
 main().catch((err) => {

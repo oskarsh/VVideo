@@ -98,6 +98,7 @@ export function RightSidebar() {
           enabled={getEffectEnabled(effectType)}
           onToggleEnabled={() => handleEffectToggle(effectType)}
           onClick={() => togglePanel(effectType)}
+          dataScreenshotOpen={effectType === 'dof' ? 'dof' : undefined}
         />
       ))}
 
@@ -133,6 +134,7 @@ export function RightSidebar() {
                   width={320}
                   onPositionChange={(x, y) => setPanelPosition(effectType, x, y)}
                   onClose={() => closePanel(effectType)}
+                  dataScreenshotTarget={effectType === 'dof' ? 'dof-panel' : undefined}
                 >
                   <GlobalEffectsPanel singleEffectType={effectType} />
                 </DraggableEffectWindow>

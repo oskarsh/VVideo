@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.0.8 — 2026-02-25
+
+**Timeline keyframe selection and highlight.**
+
+- Click a keyframe marker to select it and jump the playhead to that time.
+- Selected keyframes are highlighted with a white ring.
+- Selection clears when scrubbing elsewhere or clicking the lane background.
+
+---
+
+## 2.0.7 — 2026-02-25
+
+**Handheld shake only during playback; prev/next camera keyframe buttons.**
+
+- Handheld camera shake is no longer shown in the preview when paused.
+- Shake only applies when the scene is playing or during export.
+- Floating bar: prev/next buttons to jump between camera keyframes; selected keyframe highlights in timeline.
+
+---
+
 ## 2.0.6 — 2026-02-25
 
 **Remove "Animate over scene" pane option.**

@@ -12,6 +12,8 @@ interface DraggableEffectWindowProps {
   width?: number
   /** Called when the user finishes dragging, so the parent can remember the position. */
   onPositionChange?: (x: number, y: number) => void
+  /** SCREENSHOT_PROTOTYPE: selector for capture script */
+  dataScreenshotTarget?: string
 }
 
 export function DraggableEffectWindow({
@@ -23,6 +25,7 @@ export function DraggableEffectWindow({
   defaultY = 80,
   width = 280,
   onPositionChange,
+  dataScreenshotTarget,
 }: DraggableEffectWindowProps) {
   const [pos, setPos] = useState({ x: defaultX, y: defaultY })
   const [isDragging, setIsDragging] = useState(false)
@@ -81,6 +84,7 @@ export function DraggableEffectWindow({
       id={id}
       className="fixed z-[100] rounded-lg border border-white/20 bg-zinc-900/95 shadow-xl backdrop-blur"
       style={{ left: pos.x, top: pos.y, width }}
+      {...(dataScreenshotTarget && { 'data-screenshot-target': dataScreenshotTarget })}
     >
       <div
         role="button"
