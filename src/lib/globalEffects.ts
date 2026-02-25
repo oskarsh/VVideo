@@ -98,86 +98,87 @@ export function getGlobalEffectStateAtTime(
   if (!track) return null
   const kfs = track.keyframes as unknown as Array<Record<string, unknown>>
   const hasKeyframes = kfs?.length > 0
-  // When track exists but has no keyframes: effect on/off is track.enabled only; use defaults for params.
+  // When track exists but has no keyframes: effect on/off is track.enabled only; use track.params (or defaults) for values.
   if (!hasKeyframes) {
     const enabled = track.enabled !== false
     const def = DEFAULT_GLOBAL_KEYFRAMES[effectType] as unknown as Record<string, unknown>
+    const p = (track.params ?? {}) as Record<string, unknown>
     switch (effectType) {
       case 'camera':
-        return { enabled, fov: def.fov ?? 50 }
+        return { enabled, fov: (p.fov ?? def.fov ?? 50) as number }
       case 'grain':
-        return { type: 'grain', enabled, startOpacity: def.opacity ?? 0.06, endOpacity: def.opacity ?? 0.06 }
+        return { type: 'grain', enabled, startOpacity: (p.opacity ?? def.opacity ?? 0.06) as number, endOpacity: (p.opacity ?? def.opacity ?? 0.06) as number }
       case 'dither':
         return {
           type: 'dither',
           enabled,
-          preset: def.preset ?? 'medium',
-          mode: def.mode ?? 'bayer4',
-          levels: def.levels ?? 8,
-          intensity: def.intensity ?? 1,
-          luminanceOnly: def.luminanceOnly ?? false,
-          thresholdBias: def.thresholdBias ?? 0,
+          preset: (p.preset ?? def.preset ?? 'medium') as string,
+          mode: (p.mode ?? def.mode ?? 'bayer4') as string,
+          levels: (p.levels ?? def.levels ?? 8) as number,
+          intensity: (p.intensity ?? def.intensity ?? 1) as number,
+          luminanceOnly: (p.luminanceOnly ?? def.luminanceOnly ?? false) as boolean,
+          thresholdBias: (p.thresholdBias ?? def.thresholdBias ?? 0) as number,
         }
       case 'dof':
         return {
           type: 'dof',
           enabled,
-          focusDistanceStart: def.focusDistance ?? 0.015,
-          focusDistanceEnd: def.focusDistance ?? 0.015,
-          focalLengthStart: def.focalLength ?? 0.02,
-          focalLengthEnd: def.focalLength ?? 0.02,
-          focusRangeStart: def.focusRange ?? 0.22,
-          focusRangeEnd: def.focusRange ?? 0.22,
-          bokehScaleStart: def.bokehScale ?? 2.8,
-          bokehScaleEnd: def.bokehScale ?? 2.8,
+          focusDistanceStart: (p.focusDistance ?? def.focusDistance ?? 0.015) as number,
+          focusDistanceEnd: (p.focusDistance ?? def.focusDistance ?? 0.015) as number,
+          focalLengthStart: (p.focalLength ?? def.focalLength ?? 0.02) as number,
+          focalLengthEnd: (p.focalLength ?? def.focalLength ?? 0.02) as number,
+          focusRangeStart: (p.focusRange ?? def.focusRange ?? 0.22) as number,
+          focusRangeEnd: (p.focusRange ?? def.focusRange ?? 0.22) as number,
+          bokehScaleStart: (p.bokehScale ?? def.bokehScale ?? 2.8) as number,
+          bokehScaleEnd: (p.bokehScale ?? def.bokehScale ?? 2.8) as number,
         }
       case 'handheld':
         return {
           type: 'handheld',
           enabled,
-          intensityStart: def.intensity ?? 0.012,
-          intensityEnd: def.intensity ?? 0.012,
-          rotationShakeStart: def.rotationShake ?? 0.008,
-          rotationShakeEnd: def.rotationShake ?? 0.008,
-          speedStart: def.speed ?? 1.2,
-          speedEnd: def.speed ?? 1.2,
+          intensityStart: (p.intensity ?? def.intensity ?? 0.012) as number,
+          intensityEnd: (p.intensity ?? def.intensity ?? 0.012) as number,
+          rotationShakeStart: (p.rotationShake ?? def.rotationShake ?? 0.008) as number,
+          rotationShakeEnd: (p.rotationShake ?? def.rotationShake ?? 0.008) as number,
+          speedStart: (p.speed ?? def.speed ?? 1.2) as number,
+          speedEnd: (p.speed ?? def.speed ?? 1.2) as number,
         }
       case 'chromaticAberration':
         return {
           type: 'chromaticAberration',
           enabled,
-          offsetStart: def.offset ?? 0.005,
-          offsetEnd: def.offset ?? 0.005,
+          offsetStart: (p.offset ?? def.offset ?? 0.005) as number,
+          offsetEnd: (p.offset ?? def.offset ?? 0.005) as number,
           radialModulation: true,
         }
       case 'lensDistortion':
         return {
           type: 'lensDistortion',
           enabled,
-          distortionStart: def.distortion ?? 0.05,
-          distortionEnd: def.distortion ?? 0.05,
+          distortionStart: (p.distortion ?? def.distortion ?? 0.05) as number,
+          distortionEnd: (p.distortion ?? def.distortion ?? 0.05) as number,
         }
       case 'glitch':
         return {
           type: 'glitch',
           enabled,
-          algorithm: (def as unknown as GlobalEffectKeyframeGlitch).algorithm ?? 'sporadic',
-          ratio: def.ratio ?? 0.85,
-          columns: def.columns ?? 0.05,
-          delayMin: def.delayMin ?? 1.5,
-          delayMax: def.delayMax ?? 3.5,
-          durationMin: def.durationMin ?? 0.6,
-          durationMax: def.durationMax ?? 1,
-          monochrome: def.monochrome ?? false,
+          algorithm: (p.algorithm ?? (def as unknown as GlobalEffectKeyframeGlitch).algorithm ?? 'sporadic') as string,
+          ratio: (p.ratio ?? def.ratio ?? 0.85) as number,
+          columns: (p.columns ?? def.columns ?? 0.05) as number,
+          delayMin: (p.delayMin ?? def.delayMin ?? 1.5) as number,
+          delayMax: (p.delayMax ?? def.delayMax ?? 3.5) as number,
+          durationMin: (p.durationMin ?? def.durationMin ?? 0.6) as number,
+          durationMax: (p.durationMax ?? def.durationMax ?? 1) as number,
+          monochrome: (p.monochrome ?? def.monochrome ?? false) as boolean,
         }
       case 'vignette':
-        return { type: 'vignette', enabled, offset: def.offset ?? 0.5, darkness: def.darkness ?? 0.5 }
+        return { type: 'vignette', enabled, offset: (p.offset ?? def.offset ?? 0.5) as number, darkness: (p.darkness ?? def.darkness ?? 0.5) as number }
       case 'scanline':
         return {
           type: 'scanline',
           enabled,
-          density: def.density ?? 1.5,
-          scrollSpeed: def.scrollSpeed ?? 0,
+          density: (p.density ?? def.density ?? 1.5) as number,
+          scrollSpeed: (p.scrollSpeed ?? def.scrollSpeed ?? 0) as number,
         }
       default:
         return null

@@ -287,6 +287,8 @@ export type GlobalEffectKeyframe =
 export interface GlobalEffectTrack {
   enabled: boolean
   keyframes: GlobalEffectKeyframe[]
+  /** Non-keyframe base values (used when keyframes is empty). Keys match GlobalEffectKeyframe param names. */
+  params?: Record<string, unknown>
 }
 
 /** Global post-processing effects with keyframes on project timeline (not per-scene). */

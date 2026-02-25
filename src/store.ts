@@ -109,6 +109,8 @@ interface EditorState {
   updateGlobalEffectKeyframe: (effectType: GlobalEffectType, index: number, patch: Partial<GlobalEffectKeyframe>) => void
   /** Add or update keyframe at given time (merge patch into existing or create new). */
   setGlobalEffectKeyframeAtTime: (effectType: GlobalEffectType, time: number, patch: Partial<GlobalEffectKeyframe>) => void
+  /** Update non-keyframe base params on an existing track (no history entry). Used for live slider preview. */
+  setGlobalEffectParams: (effectType: GlobalEffectType, params: Record<string, unknown>) => void
   resetProject: () => void
   /** When trim editor is open: which video is being edited and time to show in main canvas. */
   trimScrub:
@@ -689,6 +691,20 @@ export const useStore = create<EditorState>((set) => ({
         }
       })
     ),
+  setGlobalEffectParams: (effectType, params) =>
+    set((s) => {
+      const prev = s.project.globalEffects?.[effectType]
+      if (!prev) return s
+      return {
+        project: {
+          ...s.project,
+          globalEffects: {
+            ...(s.project.globalEffects ?? {}),
+            [effectType]: { ...prev, params },
+          } as Project['globalEffects'],
+        },
+      }
+    }),
   resetProject: () =>
     set({
       project: getInitialProject(),

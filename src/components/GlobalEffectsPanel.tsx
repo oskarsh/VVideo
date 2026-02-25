@@ -285,6 +285,7 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
   const setGlobalEffectTrack = useStore((s) => s.setGlobalEffectTrack)
   const removeGlobalEffectKeyframe = useStore((s) => s.removeGlobalEffectKeyframe)
   const setGlobalEffectKeyframeAtTime = useStore((s) => s.setGlobalEffectKeyframeAtTime)
+  const setGlobalEffectParams = useStore((s) => s.setGlobalEffectParams)
 
   // Draft values per effect — held locally until the user clicks a keyframe button.
   // Once a keyframe is committed the draft is cleared and the store becomes the source of truth.
@@ -312,9 +313,10 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
         const label = GLOBAL_EFFECT_LABELS[effectType]
         const state = getStateAtPlayhead(project, effectType, currentTime, scene, sceneLocalTime, sceneDuration)
 
-        // When no track exists, merge in any local draft so sliders show the dragged value.
-        const draft = !hasTrack ? (drafts[effectType] ?? {}) : {}
-        const displayState: Record<string, unknown> = hasTrack ? state : { ...state, ...draft }
+        // When no track at all, merge in any local draft so sliders show the dragged value.
+        // When track exists (even with no keyframes), the store already reflects params, so no draft needed.
+        const draft = !track ? (drafts[effectType] ?? {}) : {}
+        const displayState: Record<string, unknown> = track ? state : { ...state, ...draft }
 
         // Whether the playhead sits on an existing keyframe for this effect (±50 ms snap).
         const SNAP_EPS = 0.05
@@ -332,14 +334,17 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
         // Slider drag:
         //   draftPatch — keys matching what displayState reads (start/end variants where needed)
         //   kfPatch    — keys for the global keyframe store (simple paramKey names); defaults to draftPatch
+        //   - has keyframe track → write kfPatch to keyframe at playhead
+        //   - track exists, no keyframes → write kfPatch to track.params (canvas updates immediately, no keyframe created)
         //   - no track → write draftPatch to local draft only
-        //   - has track → write kfPatch to keyframe at playhead
         const onSliderChange = (
           draftPatch: Record<string, unknown>,
           kfPatch: Record<string, unknown> = draftPatch
         ) => {
           if (hasTrack) {
             setGlobalEffectKeyframeAtTime(effectType, currentTime, kfPatch as Partial<import('@/types').GlobalEffectKeyframe>)
+          } else if (track) {
+            setGlobalEffectParams(effectType, { ...(track.params ?? {}), ...kfPatch })
           } else {
             setDrafts((prev) => ({
               ...prev,
@@ -352,6 +357,8 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
         const onControlChange = (patch: Record<string, unknown>) => {
           if (hasTrack) {
             setGlobalEffectKeyframeAtTime(effectType, currentTime, patch as Partial<import('@/types').GlobalEffectKeyframe>)
+          } else if (track) {
+            setGlobalEffectParams(effectType, { ...(track.params ?? {}), ...patch })
           } else {
             setDrafts((prev) => ({
               ...prev,
