@@ -573,8 +573,21 @@ function CameraRig({
 
     if (keyframes.length === 0) {
       // No flyover keyframes: use stored base so handheld doesn't accumulate when paused.
-      // Update base when handheld is off; when on, use stored base so shake animates around a fixed point.
+      // Update base when handheld is off; when on but not playing, sync base from camera so preview matches.
+      // When on and playing, use stored base so shake animates around a fixed point.
       if (!handheldOn) {
+        baseNoKeyframesRef.current = {
+          position: [camera.position.x, camera.position.y, camera.position.z],
+          rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z],
+        }
+      } else if (!handheldActive) {
+        // Handheld on but not playing: keep base in sync with current camera so preview shows correct position
+        baseNoKeyframesRef.current = {
+          position: [camera.position.x, camera.position.y, camera.position.z],
+          rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z],
+        }
+      } else if (!baseNoKeyframesRef.current) {
+        // First frame of playback with handheld: capture clean position before adding shake
         baseNoKeyframesRef.current = {
           position: [camera.position.x, camera.position.y, camera.position.z],
           rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z],

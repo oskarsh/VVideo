@@ -16,6 +16,16 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '2.0.9',
+    date: '2026-02-25',
+    summary: 'Fix handheld camera preview mismatch.',
+    items: [
+      'Handheld camera preview now stays in sync with the camera position when enabled.',
+      'Previously the preview showed an offset/rotated view while playback snapped to the correct handheld shake.',
+      'Base position is now updated when handheld is on but not playing, so lining up the camera works correctly.',
+    ],
+  },
+  {
     version: '2.0.8',
     date: '2026-02-25',
     summary: 'Timeline keyframe selection and highlight.',

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.9 — 2026-02-25
+
+**Fix handheld camera preview mismatch.**
+
+- Handheld camera preview now stays in sync with the camera position when enabled.
+- Previously the preview showed an offset/rotated view while playback snapped to the correct handheld shake.
+- Base position is now updated when handheld is on but not playing, so lining up the camera works correctly.
+
+---
+
 ## 2.0.8 — 2026-02-25
 
 **Timeline keyframe selection and highlight.**
