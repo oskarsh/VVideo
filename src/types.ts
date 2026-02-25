@@ -476,10 +476,12 @@ export function createDefaultPane(id: string): Pane {
 export function getPanesForRender(project: Project): Pane[] {
   const panes = project.panes ?? []
   if (panes.length > 0) {
-    return [...panes].sort((a, b) => a.zIndex - b.zIndex)
+    return [...panes]
+      .filter((p) => p.media.url !== '')
+      .sort((a, b) => a.zIndex - b.zIndex)
   }
   const media = getPlaneMedia(project)
-  if (!media) return []
+  if (!media || !media.url) return []
   return [
     {
       id: 'legacy',

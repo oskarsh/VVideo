@@ -1,8 +1,8 @@
 # VVideo codebase review: duplicates, integration gaps, recommendations
 
-Review date: 2025-02-24. Many contributors have touched this codebase; this doc highlights where to streamline.
+Review date: 2026-02-25. Many contributors have touched this codebase; this doc highlights where to streamline.
 
-**Low-hanging fruits (done):** Single source for effect names (`src/lib/effectLabels.ts`), `SceneEffect` from `@/types` only, export constants in `src/constants/export.ts`, pane-to-layer UI copy in AssetsPanel/PanesPanel, number helpers in `src/utils/numbers.ts`, centralized `inputClass`/section/smallLabel in `src/constants/ui.ts`, shared `Modal` in `src/components/Modal.tsx` with AboutModal refactored to use it.
+**Completed items (2026-02-25):** Single source for effect names (`src/lib/effectLabels.ts`), `SceneEffect` from `@/types` only, export constants in `src/constants/export.ts`, pane-to-layer UI copy in AssetsPanel/PanesPanel, number helpers in `src/utils/numbers.ts`, centralized `inputClass`/section/smallLabel in `src/constants/ui.ts`, shared `Modal` in `src/components/Modal.tsx` with AboutModal refactored to use it. Bug fixes: `removeScene` last-scene crash guard, `setPaneTrim` dead spread removed, `navigator.platform` deprecated API replaced, blob URL leaks fixed in AssetsPanel/PanesPanel/App, export stuck state fixed with try/finally, `applyPreset` now preserves panes, `getPanesForRender` filters empty URLs.
 
 ---
 
@@ -159,18 +159,18 @@ Review date: 2025-02-24. Many contributors have touched this codebase; this doc 
 
 ## 3. Recommended order of work
 
-| Priority | Item | Effort | Impact |
-|----------|------|--------|--------|
-| 1 | Single source for effect display names (1.2, 2.2) | Low | Medium – less confusion, one place to edit |
-| 2 | Use `SceneEffect` from `@/types` only (1.6) | Low | Low – removes type drift risk |
-| 3 | Centralize input/section/label styles (1.3) | Medium | Medium – consistency, aligns with STYLE-SYSTEM.md |
-| 4 | Unify modal shell + move ExportDialog (1.4, 2.3) | Medium | Medium – less duplication, consistent modals |
-| 5 | Extract `useFloatingPanels` (1.1) | Medium | High – removes largest state/code duplicate |
-| 6 | Shared PanelRow/EffectRow (1.5) | Low–Medium | Medium – one place for toggle + a11y |
-| 7 | Pane vs layer copy (2.1) | Low | Low – clearer UI language |
-| 8 | Number parsing/clamping util (1.8) | Low | Medium – fewer bugs, cleaner code |
-| 9 | Trim editor single owner or hook (1.7, 2.4) | Medium | Medium – less duplicate scene/trim logic |
-| 10 | Export/panel constants in one place (2.5) | Low | Low – easier config and onboarding |
+| Priority | Item | Effort | Impact | Status |
+|----------|------|--------|--------|--------|
+| 1 | Single source for effect display names (1.2, 2.2) | Low | Medium – less confusion, one place to edit | Done |
+| 2 | Use `SceneEffect` from `@/types` only (1.6) | Low | Low – removes type drift risk | Done |
+| 3 | Centralize input/section/label styles (1.3) | Medium | Medium – consistency, aligns with STYLE-SYSTEM.md | Done |
+| 4 | Unify modal shell + move ExportDialog (1.4, 2.3) | Medium | Medium – less duplication, consistent modals | Done |
+| 5 | Extract `useFloatingPanels` (1.1) | Medium | High – removes largest state/code duplicate | Done |
+| 6 | Shared PanelRow/EffectRow (1.5) | Low–Medium | Medium – one place for toggle + a11y | Done |
+| 7 | Pane vs layer copy (2.1) | Low | Low – clearer UI language | Done |
+| 8 | Number parsing/clamping util (1.8) | Low | Medium – fewer bugs, cleaner code | Done |
+| 9 | Trim editor single owner or hook (1.7, 2.4) | Medium | Medium – less duplicate scene/trim logic | Done |
+| 10 | Export/panel constants in one place (2.5) | Low | Low – easier config and onboarding | Done |
 
 ---
 

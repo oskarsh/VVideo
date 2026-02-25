@@ -483,23 +483,13 @@ function SinglePane({
   sceneDuration: number
   scrubTime: number | null
 }) {
-  const anim = pane.animation
-  const t = sceneDuration > 0 ? Math.min(1, Math.max(0, sceneLocalTime / sceneDuration)) : 0
-  const position: [number, number, number] = anim
-    ? lerpPos(anim.positionStart, anim.positionEnd, t)
-    : pane.position
-  const scale = anim ? anim.scaleStart + (anim.scaleEnd - anim.scaleStart) * t : pane.scale
-  const rotation: [number, number, number] = anim
-    ? (lerpPos(anim.rotationStart, anim.rotationEnd, t) as [number, number, number])
-    : pane.rotation
-
   const trim = scene.paneTrims?.[pane.id] ?? scene.planeTrim ?? null
   const { media, extrusionDepth } = pane
 
   if (!media.url) return null
 
   return (
-    <group position={position} scale={[scale, scale, scale]} rotation={rotation}>
+    <group position={pane.position} scale={[pane.scale, pane.scale, pane.scale]} rotation={pane.rotation}>
       {media.type === 'video' && (
         <PlaneVideo
           url={media.url}
@@ -542,6 +532,16 @@ function CameraRig({
 }) {
   const { camera } = useThree()
   const handheldElapsedRef = useRef(0)
+  /** When no flyover keyframes, store base pos/rot so handheld doesn't accumulate. */
+  const baseNoKeyframesRef = useRef<{
+    position: [number, number, number]
+    rotation: [number, number, number]
+  } | null>(null)
+  /** When disabled (edit mode), store last handheld offsets to extract base from camera. */
+  const lastHandheldOffsetsRef = useRef<{
+    position: [number, number, number]
+    rotation: [number, number, number]
+  } | null>(null)
   const zoomEffect = sceneData.effects.find((e): e is SceneEffectZoom => e.type === 'zoom')
   const zoomStart = zoomEffect?.startScale ?? 1
   const zoomEnd = zoomEffect?.endScale ?? 1
@@ -582,9 +582,20 @@ function CameraRig({
     let fov = FOV_DEG
 
     if (keyframes.length === 0) {
-      // No flyover keyframes: use current camera as base so handheld shake still works.
-      pos = [camera.position.x, camera.position.y, camera.position.z]
-      rot = [camera.rotation.x, camera.rotation.y, camera.rotation.z]
+      // No flyover keyframes: use stored base so handheld doesn't accumulate when paused.
+      // Update base when handheld is off; when on, use stored base so shake animates around a fixed point.
+      if (!handheldOn) {
+        baseNoKeyframesRef.current = {
+          position: [camera.position.x, camera.position.y, camera.position.z],
+          rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z],
+        }
+      }
+      const base = baseNoKeyframesRef.current ?? {
+        position: [camera.position.x, camera.position.y, camera.position.z] as [number, number, number],
+        rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z] as [number, number, number],
+      }
+      pos = [...base.position]
+      rot = [...base.rotation]
       fov = 'fov' in camera && Number.isFinite((camera as THREE.PerspectiveCamera).fov)
         ? (camera as THREE.PerspectiveCamera).fov
         : FOV_DEG
@@ -638,7 +649,10 @@ function CameraRig({
       ]
     }
 
-    camera.position.set(pos[0] * zoom, pos[1] * zoom, pos[2] * zoom)
+    // When no keyframes, don't apply zoom — it would scale the camera and cause drift.
+    // Zoom is for flyover animations; without keyframes the camera should stay put.
+    const effectiveZoom = keyframes.length === 0 ? 1 : zoom
+    camera.position.set(pos[0] * effectiveZoom, pos[1] * effectiveZoom, pos[2] * effectiveZoom)
     camera.rotation.set(rot[0], rot[1], rot[2])
     if ('fov' in camera) {
       const finalFov = fovOverride != null && Number.isFinite(fovOverride) ? fovOverride : (Number.isFinite(fov) ? fov : FOV_DEG)
@@ -970,13 +984,6 @@ function SceneContent() {
         d?.focusDistanceStart ?? (d as { focusDistance?: number })?.focusDistance ?? 0.015,
         d?.focusDistanceEnd ?? (d as { focusDistance?: number })?.focusDistance ?? 0.015
       )
-  const dofFocalLength =
-    globalDof != null
-      ? (globalDof.focalLengthStart as number)
-      : lerp(
-        d?.focalLengthStart ?? (d as { focalLength?: number })?.focalLength ?? 0.02,
-        d?.focalLengthEnd ?? (d as { focalLength?: number })?.focalLength ?? 0.02
-      )
   const dofFocusRange =
     globalDof != null
       ? (globalDof.focusRangeStart as number)
@@ -1224,9 +1231,8 @@ function SceneContent() {
       <EffectComposer>
         {dofEnabled ? (
           <DepthOfField
-            focusDistance={dofFocusDistance}
-            focalLength={dofFocalLength}
-            focusRange={dofFocusRange}
+            focusDistance={dofFocusDistance * 100}
+            focusRange={dofFocusRange * 5}
             bokehScale={dofBokehScale}
             height={size.height}
           />

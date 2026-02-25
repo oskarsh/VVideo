@@ -478,7 +478,6 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 return (
                   <div className="space-y-2">
                     <SliderWithKeyframe label="Focus distance" paramKey="focusDistance" value={(d.focusDistanceStart ?? d.focusDistanceEnd ?? 0.015) as number} min={0} max={0.1} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ focusDistanceStart: v, focusDistanceEnd: v }, { focusDistance: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
-                    <SliderWithKeyframe label="Focal length" paramKey="focalLength" value={(d.focalLengthStart ?? d.focalLengthEnd ?? 0.02) as number} min={0.001} max={0.08} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ focalLengthStart: v, focalLengthEnd: v }, { focalLength: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                     <SliderWithKeyframe label="Focus range" paramKey="focusRange" value={(d.focusRangeStart ?? d.focusRangeEnd ?? 0.5) as number} min={0.05} max={2} step={0.05} onChange={(v) => onSliderChange({ focusRangeStart: v, focusRangeEnd: v }, { focusRange: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                     <SliderWithKeyframe label="Bokeh scale" paramKey="bokehScale" value={(d.bokehScaleStart ?? d.bokehScaleEnd ?? 6) as number} min={0.5} max={15} step={0.5} onChange={(v) => onSliderChange({ bokehScaleStart: v, bokehScaleEnd: v }, { bokehScale: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>

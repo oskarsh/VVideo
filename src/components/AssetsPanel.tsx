@@ -35,6 +35,8 @@ export function AssetsPanel() {
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file?.type.startsWith('video/')) {
+                  const oldUrl = project.backgroundVideoUrl
+                  if (oldUrl?.startsWith('blob:')) URL.revokeObjectURL(oldUrl)
                   const url = URL.createObjectURL(file)
                   setProjectBackgroundVideo(url)
                   setBackgroundTrim(currentSceneIndex, null)
@@ -82,7 +84,10 @@ export function AssetsPanel() {
             </button>
             <button
               type="button"
-              onClick={() => setProjectBackgroundVideo(null)}
+              onClick={() => {
+                if (project.backgroundVideoUrl?.startsWith('blob:')) URL.revokeObjectURL(project.backgroundVideoUrl)
+                setProjectBackgroundVideo(null)
+              }}
               className="rounded px-2 py-1 bg-white/10 text-white/80 text-xs hover:bg-red-500/20 hover:text-red-300"
             >
               Clear
@@ -96,6 +101,8 @@ export function AssetsPanel() {
             onChange={(e) => {
               const file = e.target.files?.[0]
               if (file?.type.startsWith('video/')) {
+                const oldUrl = project.backgroundVideoUrl
+                if (oldUrl?.startsWith('blob:')) URL.revokeObjectURL(oldUrl)
                 const url = URL.createObjectURL(file)
                 setProjectBackgroundVideo(url)
                 setBackgroundTrim(currentSceneIndex, null)

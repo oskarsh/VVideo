@@ -216,13 +216,16 @@ export const useStore = create<EditorState>((set) => ({
     ),
   removeScene: (index) =>
     set(
-      withHistory((s) => ({
-        project: {
-          ...s.project,
-          scenes: s.project.scenes.filter((_, i) => i !== index),
-        },
-        currentSceneIndex: Math.max(0, Math.min(s.currentSceneIndex, s.project.scenes.length - 2)),
-      }))
+      withHistory((s) => {
+        if (s.project.scenes.length <= 1) return {}
+        return {
+          project: {
+            ...s.project,
+            scenes: s.project.scenes.filter((_, i) => i !== index),
+          },
+          currentSceneIndex: Math.max(0, Math.min(s.currentSceneIndex, s.project.scenes.length - 2)),
+        }
+      })
     ),
   duplicateScene: (index) =>
     set(
@@ -450,7 +453,7 @@ export const useStore = create<EditorState>((set) => ({
         }
       })
     ),
-  setPaneTrim: (sceneIndex, paneId, trim, endClaimed) =>
+  setPaneTrim: (sceneIndex, paneId, trim, _endClaimed) =>
     set(
       withHistory((s) => ({
         project: {
@@ -464,11 +467,6 @@ export const useStore = create<EditorState>((set) => ({
                   ...(sc.paneTrims ?? {}),
                   [paneId]: trim,
                 },
-                ...(trim === null
-                  ? {}
-                  : endClaimed === true
-                    ? {}
-                    : {}),
               }
           ),
         },

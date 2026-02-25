@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.0.5 — 2026-02-25
+
+**Fix camera drift when playing with no keyframes.**
+
+- When a scene had no camera keyframes, the zoom effect was still applied and caused the camera to drift outward during playback.
+- Zoom now only applies when flyover keyframes exist; without keyframes the camera stays put.
+
+---
+
+## 2.0.4 — 2026-02-25
+
+**Depth of field: focus distance and focus range now work correctly.**
+
+- Focus distance and focus range sliders now have visible impact on the blur (were scaled incorrectly for world units).
+- Removed redundant focal length slider (it mapped to the same parameter as focus range in the effect).
+
+---
+
 ## 2.0.3 — 2026-02-25
 
 **Per-pane trim for video layers.**
@@ -235,7 +253,7 @@
 
 ---
 
-## 1.12.6 — 2025-02-24
+## 1.12.6 — 2026-02-24
 
 **Shared floating-panel hook and PanelRow for less duplication.**
 
@@ -418,7 +436,7 @@
 
 ---
 
-## 1.1.0 — 2025-02-24
+## 1.1.0 — 2026-02-24
 
 **Changelog and smoother workflow.**
 
@@ -428,7 +446,7 @@
 
 ---
 
-## 1.0.0 — 2025-02-24
+## 1.0.0 — 2026-02-24
 
 **Initial release: 3D video editor for social content.**
 

@@ -14,6 +14,24 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '2.0.5',
+    date: '2026-02-25',
+    summary: 'Fix camera drift when playing with no keyframes.',
+    items: [
+      'When a scene had no camera keyframes, the zoom effect was still applied and caused the camera to drift outward during playback.',
+      'Zoom now only applies when flyover keyframes exist; without keyframes the camera stays put.',
+    ],
+  },
+  {
+    version: '2.0.4',
+    date: '2026-02-25',
+    summary: 'Depth of field: focus distance and focus range now work correctly.',
+    items: [
+      'Focus distance and focus range sliders now have visible impact on the blur (were scaled incorrectly for world units).',
+      'Removed redundant focal length slider (it mapped to the same parameter as focus range in the effect).',
+    ],
+  },
+  {
     version: '2.0.3',
     date: '2026-02-25',
     summary: 'Per-pane trim for video layers.',
@@ -250,7 +268,7 @@ export const changelogReleases: ChangelogRelease[] = [
   },
   {
     version: '1.12.6',
-    date: '2025-02-24',
+    date: '2026-02-24',
     summary: 'Shared floating-panel hook and PanelRow for less duplication.',
     items: [
       'Extracted useFloatingPanels hook: EffectsPanel and RightSidebar now share one implementation for open panels, positions, and toggle/close',
@@ -433,7 +451,7 @@ export const changelogReleases: ChangelogRelease[] = [
   },
   {
     version: '1.1.0',
-    date: '2025-02-24',
+    date: '2026-02-24',
     summary: 'Changelog and smoother workflow.',
     items: [
       'In-app "What\'s new" popover when you open VVideo',
@@ -443,7 +461,7 @@ export const changelogReleases: ChangelogRelease[] = [
   },
   {
     version: '1.0.0',
-    date: '2025-02-24',
+    date: '2026-02-24',
     summary: 'Initial release: 3D video editor for social content.',
     items: [
       'Scenes with background and optional panel video',

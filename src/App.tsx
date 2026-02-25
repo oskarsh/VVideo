@@ -176,7 +176,7 @@ function UndoRedoKeys() {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
-      const isMac = navigator.platform?.toLowerCase().startsWith('mac')
+      const isMac = /Mac/.test(navigator.userAgent)
       const mod = isMac ? e.metaKey : e.ctrlKey
       if (!mod || e.code !== 'KeyZ') return
       e.preventDefault()
@@ -220,6 +220,7 @@ export default function App() {
   const setPlaneTrim = useStore((s) => s.setPlaneTrim)
 
   const setProjectPlaneMedia = useStore((s) => s.setProjectPlaneMedia)
+  const project = useStore((s) => s.project)
 
   useEffect(() => {
     setContentRef(contentRef.current)
@@ -239,11 +240,16 @@ export default function App() {
   }
 
   const handleDropOverlayDrop = (file: File, type: 'background' | 'plane') => {
-    const url = URL.createObjectURL(file)
     if (type === 'background') {
+      const oldUrl = project.backgroundVideoUrl
+      if (oldUrl?.startsWith('blob:')) URL.revokeObjectURL(oldUrl)
+      const url = URL.createObjectURL(file)
       setProjectBackgroundVideo(url)
       setBackgroundTrim(currentSceneIndex, null)
     } else {
+      const oldMedia = getPlaneMedia(project)
+      if (oldMedia?.url?.startsWith('blob:')) URL.revokeObjectURL(oldMedia.url)
+      const url = URL.createObjectURL(file)
       const mediaType = getPlaneMediaType(file)
       setProjectPlaneMedia(mediaType === 'video' ? { type: 'video', url } : { type: 'image', url })
       if (mediaType === 'video') setPlaneTrim(currentSceneIndex, null)
@@ -309,6 +315,7 @@ export default function App() {
         >
           <div
             ref={previewRef}
+            data-canvas-root
             className="relative rounded-lg overflow-hidden"
             style={flyoverEditMode ? { pointerEvents: 'none' } : undefined}
           >
@@ -564,125 +571,118 @@ function ExportButton() {
     setExportDialogOpen(false)
     const useFrameByFrame = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD || frameByFrame
     if (!useFrameByFrame) setPlaying(true)
-    // Let canvas remount with alpha if plane-only
-    await new Promise((r) => setTimeout(r, 100))
-    const canvas = document.querySelector('canvas')
-    if (!canvas) {
-      setExporting(false)
-      setExportRenderMode('full')
-      setPlaying(false)
-      return
-    }
-    const stream = canvas.captureStream(framerate)
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : 'video/webm'
-    const suffix = content === 'plane-only' ? '-panel' : ''
-    const baseName = project.name || 'export'
+    try {
+      // Let canvas remount with alpha if plane-only
+      await new Promise((r) => setTimeout(r, 100))
+      const canvas = document.querySelector('[data-canvas-root] canvas') as HTMLCanvasElement | null
+      if (!canvas) return
+      const stream = canvas.captureStream(framerate)
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9'
+        : 'video/webm'
+      const suffix = content === 'plane-only' ? '-panel' : ''
+      const baseName = project.name || 'export'
 
-    const recordSegment = async (
-      startTime: number,
-      durationSeconds: number,
-      downloadName: string
-    ): Promise<void> => {
-      setCurrentSceneIndex(sceneIndexAtTime(project.scenes, startTime))
-      setCurrentTime(startTime)
-      await new Promise((r) => setTimeout(r, 50))
-      const recorder = new MediaRecorder(stream, {
-        mimeType: mime,
-        videoBitsPerSecond: bitrate,
-        audioBitsPerSecond: 0,
-      })
-      const chunks: Blob[] = []
-      recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
-      recorder.start(100)
-      if (useFrameByFrame) {
-        const frameDurationMs = 1000 / framerate
-        const segmentFrames = Math.ceil(durationSeconds * framerate)
-        for (let i = 0; i < segmentFrames; i++) {
-          const frameStart = performance.now()
-          const t = startTime + Math.min(i / framerate, durationSeconds)
-          setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
-          setCurrentTime(t)
-          await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
-          const elapsed = performance.now() - frameStart
-          const wait = Math.max(0, frameDurationMs - elapsed)
-          if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+      const recordSegment = async (
+        startTime: number,
+        durationSeconds: number,
+        downloadName: string
+      ): Promise<void> => {
+        setCurrentSceneIndex(sceneIndexAtTime(project.scenes, startTime))
+        setCurrentTime(startTime)
+        await new Promise((r) => setTimeout(r, 50))
+        const recorder = new MediaRecorder(stream, {
+          mimeType: mime,
+          videoBitsPerSecond: bitrate,
+          audioBitsPerSecond: 0,
+        })
+        const chunks: Blob[] = []
+        recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+        recorder.start(100)
+        if (useFrameByFrame) {
+          const frameDurationMs = 1000 / framerate
+          const segmentFrames = Math.ceil(durationSeconds * framerate)
+          for (let i = 0; i < segmentFrames; i++) {
+            const frameStart = performance.now()
+            const t = startTime + Math.min(i / framerate, durationSeconds)
+            setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
+            setCurrentTime(t)
+            await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+            const elapsed = performance.now() - frameStart
+            const wait = Math.max(0, frameDurationMs - elapsed)
+            if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+          }
+        } else {
+          await new Promise((r) => setTimeout(r, durationSeconds * 1000 + 500))
+        }
+        recorder.stop()
+        await new Promise<void>((resolve) => {
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' })
+            const a = document.createElement('a')
+            a.href = URL.createObjectURL(blob)
+            a.download = downloadName
+            a.click()
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+            resolve()
+          }
+        })
+      }
+
+      if (exportPerScene && project.scenes.length > 1) {
+        let sceneStartTime = 0
+        for (let i = 0; i < project.scenes.length; i++) {
+          const scene = project.scenes[i]
+          await recordSegment(
+            sceneStartTime,
+            scene.durationSeconds,
+            `${baseName}${suffix}-scene-${i + 1}.webm`
+          )
+          sceneStartTime += scene.durationSeconds
         }
       } else {
-        await new Promise((r) => setTimeout(r, durationSeconds * 1000 + 500))
-      }
-      recorder.stop()
-      await new Promise<void>((resolve) => {
+        setCurrentSceneIndex(0)
+        setCurrentTime(0)
+        const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
+        const recorder = new MediaRecorder(stream, {
+          mimeType: mime,
+          videoBitsPerSecond: bitrate,
+          audioBitsPerSecond: 0,
+        })
+        const chunks: Blob[] = []
+        recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
         recorder.onstop = () => {
           const blob = new Blob(chunks, { type: 'video/webm' })
           const a = document.createElement('a')
           a.href = URL.createObjectURL(blob)
-          a.download = downloadName
+          a.download = `${baseName}${suffix}.webm`
           a.click()
-          URL.revokeObjectURL(a.href)
-          resolve()
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000)
         }
-      })
-    }
-
-    if (exportPerScene && project.scenes.length > 1) {
-      let sceneStartTime = 0
-      for (let i = 0; i < project.scenes.length; i++) {
-        const scene = project.scenes[i]
-        await recordSegment(
-          sceneStartTime,
-          scene.durationSeconds,
-          `${baseName}${suffix}-scene-${i + 1}.webm`
-        )
-        sceneStartTime += scene.durationSeconds
-      }
-    } else {
-      setCurrentSceneIndex(0)
-      setCurrentTime(0)
-      const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
-      const recorder = new MediaRecorder(stream, {
-        mimeType: mime,
-        videoBitsPerSecond: bitrate,
-        audioBitsPerSecond: 0,
-      })
-      const chunks: Blob[] = []
-      recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' })
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = `${baseName}${suffix}.webm`
-        a.click()
-        URL.revokeObjectURL(a.href)
-        setExporting(false)
-        setExportRenderMode('full')
-        setPlaying(false)
-      }
-      recorder.start(100)
-      if (useFrameByFrame) {
-        const frameDurationMs = 1000 / framerate
-        const totalFrames = Math.ceil(totalDuration * framerate)
-        for (let i = 0; i < totalFrames; i++) {
-          const frameStart = performance.now()
-          const t = Math.min(i / framerate, totalDuration)
-          setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
-          setCurrentTime(t)
-          await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
-          const elapsed = performance.now() - frameStart
-          const wait = Math.max(0, frameDurationMs - elapsed)
-          if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+        recorder.start(100)
+        if (useFrameByFrame) {
+          const frameDurationMs = 1000 / framerate
+          const totalFrames = Math.ceil(totalDuration * framerate)
+          for (let i = 0; i < totalFrames; i++) {
+            const frameStart = performance.now()
+            const t = Math.min(i / framerate, totalDuration)
+            setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
+            setCurrentTime(t)
+            await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+            const elapsed = performance.now() - frameStart
+            const wait = Math.max(0, frameDurationMs - elapsed)
+            if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+          }
+        } else {
+          await new Promise((r) => setTimeout(r, totalDuration * 1000 + 500))
         }
-      } else {
-        await new Promise((r) => setTimeout(r, totalDuration * 1000 + 500))
+        recorder.stop()
       }
-      recorder.stop()
-      return
+    } finally {
+      setExporting(false)
+      setExportRenderMode('full')
+      setPlaying(false)
     }
-
-    setExporting(false)
-    setExportRenderMode('full')
-    setPlaying(false)
   }
 
   return (

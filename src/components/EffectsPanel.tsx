@@ -381,8 +381,6 @@ function DoFControls({
   const d = eff as DoFLegacy
   const fdS = d.focusDistanceStart ?? d.focusDistance ?? 0.015
   const fdE = d.focusDistanceEnd ?? d.focusDistance ?? 0.015
-  const flS = d.focalLengthStart ?? d.focalLength ?? 0.02
-  const flE = d.focalLengthEnd ?? d.focalLength ?? 0.02
   const frS = d.focusRangeStart ?? d.focusRange ?? 0.5
   const frE = d.focusRangeEnd ?? d.focusRange ?? 0.5
   const bS = d.bokehScaleStart ?? d.bokehScale ?? 6
@@ -400,17 +398,6 @@ function DoFControls({
           format={(v) => v.toFixed(3)}
           onStart={(v) => setEffect(sceneIndex, effectIndex, { focusDistanceStart: v })}
           onEnd={(v) => setEffect(sceneIndex, effectIndex, { focusDistanceEnd: v })}
-        />
-        <KeyframeSlider
-          label="Focal length"
-          start={flS}
-          end={flE}
-          min={0.001}
-          max={0.08}
-          step={0.001}
-          format={(v) => v.toFixed(3)}
-          onStart={(v) => setEffect(sceneIndex, effectIndex, { focalLengthStart: v })}
-          onEnd={(v) => setEffect(sceneIndex, effectIndex, { focalLengthEnd: v })}
         />
         <KeyframeSlider
           label="Focus range"

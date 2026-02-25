@@ -1,23 +1,31 @@
 # VVideo
 
-**A web-based 3D video editor for social content.**  
-Compose scenes with background + panel videos, flyover cameras, and real-time effects — all in the browser. Choose 16:9 or 9:16 aspect for Reels, TikTok, and Shorts.
+**A web-based 3D video editor for social content.**
+Compose scenes with background + panel videos, flyover cameras, timeline automation, and real-time effects — all in the browser. Choose 16:9 or 9:16 aspect for Reels, TikTok, and Shorts.
 
 ---
 
-## ✨ Features
+## Features
 
 | Feature | Description |
 |--------|-------------|
-| **Scenes** | Cut between multiple scenes; each has duration, background video, and optional video-on-plane. |
-| **3D flyover** | Define start/end camera position, rotation, and FOV per scene. Fly with orbit + WASD/QE/IJKL; set keyframes with canvas buttons; motion curve (easing) in the right sidebar. |
-| **Effects** | Zoom, grain, depth of field, handheld shake, dither, chromatic aberration, lens distortion, glitch, vignette, scanlines — keyframed per scene where applicable. |
-| **Undo / redo** | Full history for project edits (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z). |
-| **Export** | In-browser WebM (VP9 when supported). Choose resolution (480p, 720p, 1080p), framerate, bitrate; full composite or panel-only (transparent). Audio is muted. |
+| **Scenes** | Cut between multiple scenes; each has a duration, background video/texture, and optional video-on-plane layers. Duplicate, reorder, or clear scenes. |
+| **Multi-layer panes** | Add multiple video or image layers (panes) with individual Z-order, position, scale, rotation, extrusion depth, and per-scene trim. Animate each pane over scene duration. |
+| **3D flyover camera** | Add camera keyframes at any playhead position; fly with orbit controls; set easing curve between keyframes. Keyframes are draggable on the timeline. |
+| **Global timeline automation** | Keyframe grain, DoF, handheld, chromatic, lens distortion, glitch, vignette, scanlines, dither, and camera FOV on the project timeline. Values interpolate across scenes. |
+| **Presets** | Apply built-in presets (Default, Clean, Cinematic, VHS/Retro, Glitch, High Contrast, Psychedelic, Acid Trip, Dream State) or save and reuse your own. |
+| **Text layers** | Add 3D or static text overlays per scene: choose font, size, color, position, alignment. |
+| **Effects** | Zoom, grain, depth of field, handheld shake, dither (8 modes), chromatic aberration, lens distortion, glitch (5 algorithms), vignette, scanlines — per-scene or globally keyframed. |
+| **Background** | Video file, or generated texture: Gradient, Terrain, Noise, or Dots. Continuous background mode plays the video uninterrupted across scenes. |
+| **Example assets** | Click-to-use background videos and panel clips built into the sidebar. |
+| **Floating transport bar** | Play, Loop, Jump to scene start/next, Set camera keyframe at playhead, live camera coordinates display. |
+| **Export** | In-browser WebM (VP9 when supported). Resolutions: 480p, 720p, 1080p, 2K, 4K. Per-scene export (one file per scene). Full composite or panel-only (transparent). Frame-by-frame rendering for 2K/4K. |
+| **Screenshot** | Capture the current canvas frame as PNG at any resolution. |
+| **Undo / Redo** | Full history for all project edits (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z). |
 
 ---
 
-## 🚀 Quick start
+## Quick start
 
 ```bash
 npm install
@@ -28,38 +36,43 @@ Open **http://localhost:5173**. Drop a background video (and optionally a clip f
 
 ---
 
-## 📁 Project structure
+## Project structure
 
 ```
 src/
+├── App.tsx            # Root layout, export logic, keyboard shortcuts
 ├── store.ts           # Zustand store (project, scenes, playback, export, undo history)
-├── types.ts           # Scene, flyover, effects
-├── components/        # EditorCanvas (R3F + postprocessing), Sidebar, Timeline, etc.
-├── effects/           # Dither, lens distortion
-├── lib/               # Presets and utilities
-└── utils/             # Helpers (e.g. smooth noise)
+├── types.ts           # Scene, Project, Pane, effects, and utility functions
+├── changelog.ts       # In-app changelog data
+├── components/        # EditorCanvas (R3F + postprocessing), Sidebar, Timeline, panels, modals
+├── context/           # LayoutContext (preview ref, panel positions)
+├── hooks/             # Shared hooks (useFloatingPanels, etc.)
+├── constants/         # Export options, UI class strings, asset URLs
+├── effects/           # Dither, lens distortion shaders
+├── lib/               # Presets, flyover, globalEffects utilities
+└── utils/             # Number helpers, smooth noise
 ```
 
 ---
 
-## 🛠 Tech stack
+## Tech stack
 
 - **React 18** · **TypeScript** · **Vite**
 - **React Three Fiber** · **Drei** · **@react-three/postprocessing**
-- **Zustand** · **Tailwind CSS**
+- **Zustand** · **Tailwind CSS** · **Lucide React**
 
 ---
 
-## 🌐 Deploy
+## Deploy
 
 The app runs fully in the browser; export is in-browser WebM.
 
 ### GitHub Pages
 
 1. Create a repo on GitHub (e.g. `VVideo`), then push your code (default branch `main`).
-2. In the repo: **Settings → Pages → Build and deployment**  
+2. In the repo: **Settings → Pages → Build and deployment**
    - **Source**: GitHub Actions.
-3. On every push to `main`, the workflow builds and deploys.  
+3. On every push to `main`, the workflow builds and deploys.
    Your site will be at **`https://oskarsh.github.io/<repo-name>/`** (e.g. `https://oskarsh.github.io/VVideo/`).
 
 ### Other hosts

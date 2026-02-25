@@ -128,19 +128,6 @@ function getSceneAutomationCurves(scene: Scene, sceneIndex: number): AutomationC
             endKey: 'focusDistanceEnd',
             step: 0.001,
           })
-        if (e.focalLengthStart !== e.focalLengthEnd)
-          curves.push({
-            label: 'DoF focal',
-            startVal: e.focalLengthStart,
-            endVal: e.focalLengthEnd,
-            min: 0.001,
-            max: 0.08,
-            sceneIndex,
-            effectIndex,
-            startKey: 'focalLengthStart',
-            endKey: 'focalLengthEnd',
-            step: 0.001,
-          })
         if (e.focusRangeStart !== e.focusRangeEnd)
           curves.push({
             label: 'DoF range',

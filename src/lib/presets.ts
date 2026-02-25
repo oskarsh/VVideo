@@ -58,6 +58,7 @@ export function applyPreset(preset: Preset, currentProject: Project): Project {
     planeVideoUrl: currentProject.planeVideoUrl,
     planeMedia: currentProject.planeMedia,
     planeExtrusionDepth: currentProject.planeExtrusionDepth,
+    panes: currentProject.panes,
     dither: preset.project.dither ?? currentProject.dither ?? DEFAULT_DITHER,
     globalEffects: preset.project.globalEffects ?? currentProject.globalEffects,
     scenes: preset.project.scenes.map((s, i) => {

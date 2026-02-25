@@ -188,6 +188,9 @@ export function PanesPanel() {
   const handlePaneFile = (paneId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const pane = panes.find(p => p.id === paneId)
+    const oldUrl = pane?.media?.url
+    if (oldUrl?.startsWith('blob:')) URL.revokeObjectURL(oldUrl)
     const url = URL.createObjectURL(file)
     const type = getMediaTypeFromFile(file)
     const media: PlaneMedia = type === 'video' ? { type: 'video', url } : { type: 'image', url }
@@ -235,7 +238,7 @@ export function PanesPanel() {
         </div>
       </div>
       <p className="text-xs text-white/50 mb-2">
-        Multiple video/image layers. Z-order: lower index = behind. Enable animation to animate over the scene.
+        Multiple video/image layers. Z-order: lower index = behind.
       </p>
       {panes.length === 0 && texts.length === 0 ? (
         <>
@@ -265,7 +268,10 @@ export function PanesPanel() {
               index={index}
               scene={scene}
               onUpdate={(patch) => updatePane(pane.id, patch)}
-              onRemove={() => removePane(pane.id)}
+              onRemove={() => {
+                if (pane.media?.url?.startsWith('blob:')) URL.revokeObjectURL(pane.media.url)
+                removePane(pane.id)
+              }}
               onMoveUp={index > 0 ? () => reorderPanes(index, index - 1) : undefined}
               onMoveDown={index < panes.length - 1 ? () => reorderPanes(index, index + 1) : undefined}
               onSelectFile={() => fileInputRefs.current[pane.id]?.click()}
@@ -369,7 +375,6 @@ function PaneItem({
   setTrimEditorOpen: (v: 'background' | 'plane' | { type: 'pane'; paneId: string } | null) => void
   currentSceneIndex: number
 }) {
-  const anim = pane.animation
   const paneTrim = scene.paneTrims?.[pane.id] ?? null
   const isVideo = pane.media?.type === 'video'
 
@@ -525,61 +530,6 @@ function PaneItem({
         format={(v) => v.toFixed(2)}
         onChange={(v) => onUpdate({ extrusionDepth: v })}
       />
-      <div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={Boolean(anim)}
-            onChange={(e) => {
-              if (e.target.checked) {
-                onUpdate({
-                  animation: {
-                    positionStart: [...pane.position],
-                    positionEnd: [...pane.position],
-                    scaleStart: pane.scale,
-                    scaleEnd: pane.scale,
-                    rotationStart: [...pane.rotation],
-                    rotationEnd: [...pane.rotation],
-                  },
-                })
-              } else {
-                onUpdate({ animation: null })
-              }
-            }}
-            className="rounded border-white/20"
-          />
-          <span className="text-xs text-white/70">Animate over scene</span>
-        </label>
-      </div>
-      {anim && (
-        <div className="pl-2 border-l-2 border-white/10 space-y-2">
-          <span className="text-[10px] text-white/50 uppercase tracking-wider">Animation end</span>
-          <SliderRow
-            label="Pos Z end"
-            value={anim.positionEnd[2]}
-            min={-2}
-            max={4}
-            step={0.05}
-            format={(v) => v.toFixed(2)}
-            onChange={(v) =>
-              onUpdate({
-                animation: { ...anim, positionEnd: [anim.positionEnd[0], anim.positionEnd[1], v] },
-              })
-            }
-          />
-          <SliderRow
-            label="Scale end"
-            value={anim.scaleEnd}
-            min={0.2}
-            max={5}
-            step={0.05}
-            format={(v) => v.toFixed(2)}
-            onChange={(v) =>
-              onUpdate({ animation: { ...anim, scaleEnd: v } })
-            }
-          />
-        </div>
-      )}
     </div>
   )
 }
