@@ -14,6 +14,35 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '2.0.3',
+    date: '2026-02-25',
+    summary: 'Per-pane trim for video layers.',
+    items: [
+      'Video panes in Layers panel now have trim controls: Start and End inputs plus Edit button.',
+      'Edit opens the trim editor modal with waveform and draggable handles.',
+      'Canvas preview updates live while trimming a pane.',
+    ],
+  },
+  {
+    version: '2.0.2',
+    date: '2026-02-25',
+    summary: 'Screenshot button to capture the current canvas frame.',
+    items: [
+      'Screenshot button in the header (next to Export) captures the current frame as PNG.',
+      'Choose scale/resolution: Preview (1×), 720p, 1080p, 2K, or 4K.',
+      'Higher resolutions re-render the canvas at that size for crisp output.',
+    ],
+  },
+  {
+    version: '2.0.1',
+    date: '2026-02-25',
+    summary: 'Double-click keyframes on the timeline to remove them.',
+    items: [
+      'Global effect keyframes (cyan markers): double-click to remove.',
+      'Camera keyframes (amber markers): double-click to remove.',
+    ],
+  },
+  {
     version: '2.0.0',
     date: '2026-02-25',
     summary: 'Major release: timeline automation, presets, effects, and more.',

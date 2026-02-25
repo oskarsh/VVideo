@@ -1,4 +1,3 @@
-import { Play } from 'lucide-react'
 import { useState } from 'react'
 import { useStore } from '@/store'
 import { CollapsibleSection } from './CollapsibleSection'
@@ -202,9 +201,11 @@ function getDefaultEffectState(effectType: GlobalEffectType): Record<string, unk
   }
 }
 
-/** Single slider with a keyframe (▶) button on the right.
- *  - `onChange`   — fired on slider drag; never creates a keyframe
- *  - `onKeyframe` — fired only when the button is clicked; always commits a keyframe
+/** Single slider with a keyframe dot button on the right.
+ *  - `onChange`          — slider drag; never creates a keyframe
+ *  - `onKeyframe`        — button click when NOT on a keyframe; commits a keyframe
+ *  - `onRemoveKeyframe`  — button click when ON a keyframe; removes it
+ *  - `isOnKeyframe`      — dot is filled when true, outlined when false
  */
 function SliderWithKeyframe({
   label,
@@ -216,7 +217,8 @@ function SliderWithKeyframe({
   format = (v) => String(v),
   onChange,
   onKeyframe,
-  title = 'Set keyframe at playhead',
+  onRemoveKeyframe,
+  isOnKeyframe = false,
 }: {
   label: string
   paramKey: string
@@ -227,8 +229,17 @@ function SliderWithKeyframe({
   format?: (v: number) => string
   onChange: (v: number) => void
   onKeyframe: (patch: Record<string, number>) => void
-  title?: string
+  onRemoveKeyframe?: () => void
+  isOnKeyframe?: boolean
 }) {
+  const handleButtonClick = () => {
+    if (isOnKeyframe && onRemoveKeyframe) {
+      onRemoveKeyframe()
+    } else {
+      onKeyframe({ [paramKey]: value })
+    }
+  }
+
   return (
     <div className="flex items-center gap-1 group">
       <div className="flex-1 min-w-0">
@@ -243,7 +254,7 @@ function SliderWithKeyframe({
               value={value}
               onChange={(e) => onChange(parseFloat(e.target.value))}
               className="w-full block"
-              style={{ minWidth: 60, height: 24 }}
+              style={{ minWidth: 60 }}
             />
           </div>
           <span className="text-[10px] text-white/40 w-8 shrink-0">{format(value)}</span>
@@ -251,11 +262,16 @@ function SliderWithKeyframe({
       </div>
       <button
         type="button"
-        onClick={() => onKeyframe({ [paramKey]: value })}
-        className="w-6 h-6 rounded flex items-center justify-center text-[10px] text-white/50 hover:text-white hover:bg-white/10 shrink-0"
-        title={title}
+        onClick={handleButtonClick}
+        className="w-6 h-6 rounded flex items-center justify-center shrink-0 hover:bg-white/10"
+        title={isOnKeyframe ? 'Remove keyframe at playhead' : 'Set keyframe at playhead'}
       >
-        <Play className="w-3.5 h-3.5" />
+        <svg viewBox="0 0 10 10" className="w-2.5 h-2.5">
+          {isOnKeyframe
+            ? <circle cx="5" cy="5" r="4.5" fill="white" />
+            : <circle cx="5" cy="5" r="3.5" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" />
+          }
+        </svg>
       </button>
     </div>
   )
@@ -300,9 +316,39 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
         const draft = !hasTrack ? (drafts[effectType] ?? {}) : {}
         const displayState: Record<string, unknown> = hasTrack ? state : { ...state, ...draft }
 
-        // Slider drag / select / checkbox change:
-        //   - no track → update local draft only (no store write, no keyframe)
-        //   - has track → update keyframe at playhead
+        // Whether the playhead sits on an existing keyframe for this effect (±50 ms snap).
+        const SNAP_EPS = 0.05
+        const isOnKeyframe = Boolean(
+          hasTrack && track!.keyframes.some((kf) => Math.abs(kf.time - currentTime) < SNAP_EPS)
+        )
+
+        // Remove the keyframe closest to the current playhead position.
+        const removeKeyframeAtCurrentTime = () => {
+          if (!hasTrack) return
+          const idx = track!.keyframes.findIndex((kf) => Math.abs(kf.time - currentTime) < SNAP_EPS)
+          if (idx >= 0) removeGlobalEffectKeyframe(effectType, idx)
+        }
+
+        // Slider drag:
+        //   draftPatch — keys matching what displayState reads (start/end variants where needed)
+        //   kfPatch    — keys for the global keyframe store (simple paramKey names); defaults to draftPatch
+        //   - no track → write draftPatch to local draft only
+        //   - has track → write kfPatch to keyframe at playhead
+        const onSliderChange = (
+          draftPatch: Record<string, unknown>,
+          kfPatch: Record<string, unknown> = draftPatch
+        ) => {
+          if (hasTrack) {
+            setGlobalEffectKeyframeAtTime(effectType, currentTime, kfPatch as Partial<import('@/types').GlobalEffectKeyframe>)
+          } else {
+            setDrafts((prev) => ({
+              ...prev,
+              [effectType]: { ...(prev[effectType] ?? {}), ...draftPatch },
+            }))
+          }
+        }
+
+        // Select / checkbox change (field names are the same for draft and keyframe store).
         const onControlChange = (patch: Record<string, unknown>) => {
           if (hasTrack) {
             setGlobalEffectKeyframeAtTime(effectType, currentTime, patch as Partial<import('@/types').GlobalEffectKeyframe>)
@@ -314,8 +360,8 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
           }
         }
 
-        // Keyframe button click: always commits. Merges state + draft + the button's param value.
-        // Clears the draft for this effect after committing.
+        // Keyframe button click (when NOT on a keyframe): always commits.
+        // Merges state + draft + the button's param value, then clears the draft.
         const onKf = (patch: Record<string, unknown>) => {
           if (hasTrack) {
             setGlobalEffectKeyframeAtTime(effectType, currentTime, patch as Partial<import('@/types').GlobalEffectKeyframe>)
@@ -334,6 +380,9 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
           <div className="rounded bg-white/5 p-2 space-y-2">
             {/* Sliders always visible — reflect current state at playhead (keyframes, project.dither, or scene). */}
             {(() => {
+              // Shared props for every SliderWithKeyframe in this effect section.
+              const kfProps = { isOnKeyframe, onRemoveKeyframe: removeKeyframeAtCurrentTime }
+
               if (effectType === 'camera') {
                 const fov = (displayState.fov ?? 50) as number
                 return (
@@ -346,14 +395,15 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                       max={120}
                       step={1}
                       format={(x) => `${Math.round(x)}°`}
-                      onChange={(v) => onControlChange({ fov: v })}
+                      onChange={(v) => onSliderChange({ fov: v })}
                       onKeyframe={(p) => onKf(p)}
+                      {...kfProps}
                     />
                   </div>
                 )
               }
               if (effectType === 'grain') {
-                const v = (displayState.startOpacity ?? displayState.endOpacity ?? displayState.opacity ?? 0.15) as number
+                const v = (displayState.startOpacity ?? displayState.endOpacity ?? 0.15) as number
                 return (
                   <div className="space-y-2">
                     <SliderWithKeyframe
@@ -364,8 +414,9 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                       max={0.5}
                       step={0.01}
                       format={(x) => `${(x * 100).toFixed(0)}%`}
-                      onChange={(v) => onControlChange({ opacity: v })}
+                      onChange={(v) => onSliderChange({ startOpacity: v, endOpacity: v }, { opacity: v })}
                       onKeyframe={(p) => onKf(p)}
+                      {...kfProps}
                     />
                   </div>
                 )
@@ -399,10 +450,10 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                       </select>
                     </div>
                     {((d.preset as string) ?? 'medium') === 'custom' && (
-                      <SliderWithKeyframe label="Levels" paramKey="levels" value={(d.levels ?? 8) as number} min={2} max={32} step={1} onChange={(v) => onControlChange({ levels: v })} onKeyframe={(p) => onKf(p)} />
+                      <SliderWithKeyframe label="Levels" paramKey="levels" value={(d.levels ?? 8) as number} min={2} max={32} step={1} onChange={(v) => onSliderChange({ levels: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                     )}
-                    <SliderWithKeyframe label="Intensity" paramKey="intensity" value={(d.intensity ?? 1) as number} min={0} max={1} step={0.05} format={(x) => `${(x * 100).toFixed(0)}%`} onChange={(v) => onControlChange({ intensity: v })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Threshold bias" paramKey="thresholdBias" value={(d.thresholdBias ?? 0) as number} min={-0.3} max={0.3} step={0.02} onChange={(v) => onControlChange({ thresholdBias: v })} onKeyframe={(p) => onKf(p)} />
+                    <SliderWithKeyframe label="Intensity" paramKey="intensity" value={(d.intensity ?? 1) as number} min={0} max={1} step={0.05} format={(x) => `${(x * 100).toFixed(0)}%`} onChange={(v) => onSliderChange({ intensity: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Threshold bias" paramKey="thresholdBias" value={(d.thresholdBias ?? 0) as number} min={-0.3} max={0.3} step={0.02} onChange={(v) => onSliderChange({ thresholdBias: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                     <label className="flex items-center gap-2 text-[11px] text-white/60 cursor-pointer">
                       <input
                         type="checkbox"
@@ -419,10 +470,10 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 const d = displayState
                 return (
                   <div className="space-y-2">
-                    <SliderWithKeyframe label="Focus distance" paramKey="focusDistance" value={(d.focusDistanceStart ?? d.focusDistanceEnd ?? 0.015) as number} min={0} max={0.1} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onControlChange({ focusDistance: v })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Focal length" paramKey="focalLength" value={(d.focalLengthStart ?? d.focalLengthEnd ?? 0.02) as number} min={0.001} max={0.08} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onControlChange({ focalLength: v })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Focus range" paramKey="focusRange" value={(d.focusRangeStart ?? d.focusRangeEnd ?? 0.5) as number} min={0.05} max={2} step={0.05} onChange={(v) => onControlChange({ focusRange: v })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Bokeh scale" paramKey="bokehScale" value={(d.bokehScaleStart ?? d.bokehScaleEnd ?? 6) as number} min={0.5} max={15} step={0.5} onChange={(v) => onControlChange({ bokehScale: v })} onKeyframe={(p) => onKf(p)} />
+                    <SliderWithKeyframe label="Focus distance" paramKey="focusDistance" value={(d.focusDistanceStart ?? d.focusDistanceEnd ?? 0.015) as number} min={0} max={0.1} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ focusDistanceStart: v, focusDistanceEnd: v }, { focusDistance: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Focal length" paramKey="focalLength" value={(d.focalLengthStart ?? d.focalLengthEnd ?? 0.02) as number} min={0.001} max={0.08} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ focalLengthStart: v, focalLengthEnd: v }, { focalLength: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Focus range" paramKey="focusRange" value={(d.focusRangeStart ?? d.focusRangeEnd ?? 0.5) as number} min={0.05} max={2} step={0.05} onChange={(v) => onSliderChange({ focusRangeStart: v, focusRangeEnd: v }, { focusRange: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Bokeh scale" paramKey="bokehScale" value={(d.bokehScaleStart ?? d.bokehScaleEnd ?? 6) as number} min={0.5} max={15} step={0.5} onChange={(v) => onSliderChange({ bokehScaleStart: v, bokehScaleEnd: v }, { bokehScale: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>
                 )
               }
@@ -430,9 +481,9 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 const h = displayState
                 return (
                   <div className="space-y-2">
-                    <SliderWithKeyframe label="Intensity" paramKey="intensity" value={(h.intensityStart ?? h.intensityEnd ?? 0.012) as number} min={0} max={0.05} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onControlChange({ intensity: v })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Rotation shake" paramKey="rotationShake" value={(h.rotationShakeStart ?? h.rotationShakeEnd ?? 0.008) as number} min={0} max={0.03} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onControlChange({ rotationShake: v })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Speed" paramKey="speed" value={(h.speedStart ?? h.speedEnd ?? 1.2) as number} min={0.2} max={3} step={0.1} onChange={(v) => onControlChange({ speed: v })} onKeyframe={(p) => onKf(p)} />
+                    <SliderWithKeyframe label="Intensity" paramKey="intensity" value={(h.intensityStart ?? h.intensityEnd ?? 0.012) as number} min={0} max={0.05} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ intensityStart: v, intensityEnd: v }, { intensity: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Rotation shake" paramKey="rotationShake" value={(h.rotationShakeStart ?? h.rotationShakeEnd ?? 0.008) as number} min={0} max={0.03} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ rotationShakeStart: v, rotationShakeEnd: v }, { rotationShake: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Speed" paramKey="speed" value={(h.speedStart ?? h.speedEnd ?? 1.2) as number} min={0.2} max={3} step={0.1} onChange={(v) => onSliderChange({ speedStart: v, speedEnd: v }, { speed: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>
                 )
               }
@@ -440,7 +491,7 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 const c = displayState
                 return (
                   <div className="space-y-2">
-                    <SliderWithKeyframe label="Offset" paramKey="offset" value={(c.offsetStart ?? c.offsetEnd ?? 0.005) as number} min={0} max={0.02} step={0.001} format={(x) => (x * 1000).toFixed(1)} onChange={(v) => onControlChange({ offset: v })} onKeyframe={(p) => onKf(p)} />
+                    <SliderWithKeyframe label="Offset" paramKey="offset" value={(c.offsetStart ?? c.offsetEnd ?? 0.005) as number} min={0} max={0.02} step={0.001} format={(x) => (x * 1000).toFixed(1)} onChange={(v) => onSliderChange({ offsetStart: v, offsetEnd: v }, { offset: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>
                 )
               }
@@ -448,7 +499,7 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 const l = displayState
                 return (
                   <div className="space-y-2">
-                    <SliderWithKeyframe label="Distortion" paramKey="distortion" value={(l.distortionStart ?? l.distortionEnd ?? 0.05) as number} min={-0.2} max={0.2} step={0.01} onChange={(v) => onControlChange({ distortion: v })} onKeyframe={(p) => onKf(p)} />
+                    <SliderWithKeyframe label="Distortion" paramKey="distortion" value={(l.distortionStart ?? l.distortionEnd ?? 0.05) as number} min={-0.2} max={0.2} step={0.01} onChange={(v) => onSliderChange({ distortionStart: v, distortionEnd: v }, { distortion: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>
                 )
               }
@@ -456,8 +507,8 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 const g = displayState
                 return (
                   <div className="space-y-2">
-                    <SliderWithKeyframe label="Ratio" paramKey="ratio" value={(g.ratio ?? 0.85) as number} min={0} max={1} step={0.05} onChange={(v) => onControlChange({ ratio: v })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Columns" paramKey="columns" value={(g.columns ?? 0.05) as number} min={0.01} max={0.2} step={0.01} onChange={(v) => onControlChange({ columns: v })} onKeyframe={(p) => onKf(p)} />
+                    <SliderWithKeyframe label="Ratio" paramKey="ratio" value={(g.ratio ?? 0.85) as number} min={0} max={1} step={0.05} onChange={(v) => onSliderChange({ ratio: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Columns" paramKey="columns" value={(g.columns ?? 0.05) as number} min={0.01} max={0.2} step={0.01} onChange={(v) => onSliderChange({ columns: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>
                 )
               }
@@ -465,8 +516,8 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 const v = displayState
                 return (
                   <div className="space-y-2">
-                    <SliderWithKeyframe label="Offset" paramKey="offset" value={(v.offset ?? 0.5) as number} min={0} max={1} step={0.05} onChange={(x) => onControlChange({ offset: x })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Darkness" paramKey="darkness" value={(v.darkness ?? 0.5) as number} min={0} max={1} step={0.05} onChange={(x) => onControlChange({ darkness: x })} onKeyframe={(p) => onKf(p)} />
+                    <SliderWithKeyframe label="Offset" paramKey="offset" value={(v.offset ?? 0.5) as number} min={0} max={1} step={0.05} onChange={(x) => onSliderChange({ offset: x })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Darkness" paramKey="darkness" value={(v.darkness ?? 0.5) as number} min={0} max={1} step={0.05} onChange={(x) => onSliderChange({ darkness: x })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>
                 )
               }
@@ -474,8 +525,8 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 const s = displayState
                 return (
                   <div className="space-y-2">
-                    <SliderWithKeyframe label="Density" paramKey="density" value={(s.density ?? 1.5) as number} min={0.5} max={4} step={0.1} onChange={(v) => onControlChange({ density: v })} onKeyframe={(p) => onKf(p)} />
-                    <SliderWithKeyframe label="Scroll speed" paramKey="scrollSpeed" value={(s.scrollSpeed ?? 0) as number} min={0} max={2} step={0.1} onChange={(v) => onControlChange({ scrollSpeed: v })} onKeyframe={(p) => onKf(p)} />
+                    <SliderWithKeyframe label="Density" paramKey="density" value={(s.density ?? 1.5) as number} min={0.5} max={4} step={0.1} onChange={(v) => onSliderChange({ density: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Scroll speed" paramKey="scrollSpeed" value={(s.scrollSpeed ?? 0) as number} min={0} max={2} step={0.1} onChange={(v) => onSliderChange({ scrollSpeed: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>
                 )
               }

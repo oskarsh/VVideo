@@ -109,6 +109,7 @@ export function TrimEditorModal({
   initialTrim,
   sceneDuration: _sceneDuration,
   videoType,
+  paneId,
   onApply,
   onClose,
 }: {
@@ -117,11 +118,21 @@ export function TrimEditorModal({
   videoUrl: string
   initialTrim: TrimRange | null
   sceneDuration: number
-  videoType: 'background' | 'plane'
+  videoType: 'background' | 'plane' | 'pane'
+  paneId?: string
   onApply: (trim: TrimRange) => void
   onClose: () => void
 }) {
   const setTrimScrub = useStore((s) => s.setTrimScrub)
+  const scrubPayload = useCallback(
+    (time: number) =>
+      videoType === 'pane' && paneId != null
+        ? { video: 'pane' as const, paneId, time }
+        : videoType === 'background'
+          ? { video: 'background' as const, time }
+          : { video: 'plane' as const, time },
+    [videoType, paneId]
+  )
   const videoRef = useRef<HTMLVideoElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
   const [duration, setDuration] = useState<number>(0)
@@ -163,30 +174,30 @@ export function TrimEditorModal({
     const start = initialTrim ? Math.min(initialTrim.start, duration) : 0
     const end = initialTrim ? Math.min(initialTrim.end, duration) : duration
     setTrim({ start, end })
-    setTrimScrub({ video: videoType, time: start })
+    setTrimScrub(scrubPayload(start))
     const video = videoRef.current
     if (video) {
       video.currentTime = start
       setPreviewTime(start)
     }
-  }, [duration, initialTrim, videoType, setTrimScrub])
+  }, [duration, initialTrim, scrubPayload, setTrimScrub])
 
   useEffect(() => {
-    setTrimScrub({ video: videoType, time: trim.start })
+    setTrimScrub(scrubPayload(trim.start))
     return () => setTrimScrub(null)
-  }, [videoType, setTrimScrub])
+  }, [scrubPayload, trim.start, setTrimScrub])
 
   const scrubTo = useCallback(
     (t: number) => {
       const clamped = Math.max(0, Math.min(t, duration))
-      setTrimScrub({ video: videoType, time: clamped })
+      setTrimScrub(scrubPayload(clamped))
       const v = videoRef.current
       if (v) {
         v.currentTime = clamped
         setPreviewTime(clamped)
       }
     },
-    [duration, videoType, setTrimScrub]
+    [duration, scrubPayload, setTrimScrub]
   )
 
   const handleStartChange = useCallback(
@@ -208,13 +219,13 @@ export function TrimEditorModal({
   )
 
   const handleEndDragRelease = useCallback(() => {
-    setTrimScrub({ video: videoType, time: trim.start })
+    setTrimScrub(scrubPayload(trim.start))
     const v = videoRef.current
     if (v) {
       v.currentTime = trim.start
       setPreviewTime(trim.start)
     }
-  }, [videoType, trim.start, setTrimScrub])
+  }, [scrubPayload, trim.start, setTrimScrub])
 
   const pxToTime = useCallback(
     (px: number) => {

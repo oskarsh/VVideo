@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.0.3 — 2026-02-25
+
+**Per-pane trim for video layers.**
+
+- Video panes in Layers panel now have trim controls: Start and End inputs plus Edit button.
+- Edit opens the trim editor modal with waveform and draggable handles.
+- Canvas preview updates live while trimming a pane.
+
+---
+
+## 2.0.2 — 2026-02-25
+
+**Screenshot button to capture the current canvas frame.**
+
+- Screenshot button in the header (next to Export) captures the current frame as PNG.
+- Choose scale/resolution: Preview (1×), 720p, 1080p, 2K, or 4K.
+- Higher resolutions re-render the canvas at that size for crisp output.
+
+---
+
+## 2.0.1 — 2026-02-25
+
+**Double-click keyframes on the timeline to remove them.**
+
+- Global effect keyframes (cyan markers): double-click to remove.
+- Camera keyframes (amber markers): double-click to remove.
+
+---
+
 ## 2.0.0 — 2026-02-25
 
 **Major release: timeline automation, presets, effects, and more.**

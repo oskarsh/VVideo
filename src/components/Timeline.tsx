@@ -286,6 +286,8 @@ export function Timeline() {
   const setProjectFps = useStore((s) => s.setProjectFps)
   const updateGlobalEffectKeyframe = useStore((s) => s.updateGlobalEffectKeyframe)
   const updateFlyoverKeyframe = useStore((s) => s.updateFlyoverKeyframe)
+  const removeGlobalEffectKeyframe = useStore((s) => s.removeGlobalEffectKeyframe)
+  const removeFlyoverKeyframe = useStore((s) => s.removeFlyoverKeyframe)
 
   const [automationDrag, setAutomationDrag] = useState<{
     curve: AutomationCurve
@@ -719,7 +721,12 @@ export function Timeline() {
                       const rect = keyframeTrackRef.current?.getBoundingClientRect()
                       if (rect) setKeyframeDrag({ kind: 'global', effectType: type, keyframeTime: time, initialTime: time, trackRect: rect })
                     }}
-                    title={`${globalEffectLabel[type]} @ ${formatTime(time)} — drag to move`}
+                    onDoubleClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (kfIndex >= 0) removeGlobalEffectKeyframe(type, kfIndex)
+                    }}
+                    title={`${globalEffectLabel[type]} @ ${formatTime(time)} — drag to move, double-click to remove`}
                   />
                 )
               })}
@@ -767,7 +774,12 @@ export function Timeline() {
                       const rect = keyframeTrackRef.current?.getBoundingClientRect()
                       if (rect) setKeyframeDrag({ kind: 'camera', sceneIndex, keyframeTime: normalizedTime, initialTime: projectTime, trackRect: rect })
                     }}
-                    title={`Camera @ ${formatTime(projectTime)} — drag to move`}
+                    onDoubleClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (kfIndex >= 0) removeFlyoverKeyframe(sceneIndex, kfIndex)
+                    }}
+                    title={`Camera @ ${formatTime(projectTime)} — drag to move, double-click to remove`}
                   />
                 )
               })}

@@ -1181,17 +1181,20 @@ function SceneContent() {
       {(() => {
         const panes = getPanesForRender(project)
         if (panes.length > 0) {
-          const scrubTime = trimScrub?.video === 'plane' ? trimScrub.time : null
-          return panes.map((pane) => (
-            <SinglePane
-              key={pane.id}
-              pane={pane}
-              scene={scene}
-              sceneLocalTime={sceneLocalTime}
-              sceneDuration={sceneDuration}
-              scrubTime={scrubTime}
-            />
-          ))
+          return panes.map((pane) => {
+            const scrubTime =
+              trimScrub?.video === 'pane' && trimScrub.paneId === pane.id ? trimScrub.time : null
+            return (
+              <SinglePane
+                key={pane.id}
+                pane={pane}
+                scene={scene}
+                sceneLocalTime={sceneLocalTime}
+                sceneDuration={sceneDuration}
+                scrubTime={scrubTime}
+              />
+            )
+          })
         }
         const planeMedia = getPlaneMedia(project)
         const extrusion = project.planeExtrusionDepth ?? 0

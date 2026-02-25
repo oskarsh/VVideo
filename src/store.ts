@@ -111,11 +111,21 @@ interface EditorState {
   setGlobalEffectKeyframeAtTime: (effectType: GlobalEffectType, time: number, patch: Partial<GlobalEffectKeyframe>) => void
   resetProject: () => void
   /** When trim editor is open: which video is being edited and time to show in main canvas. */
-  trimScrub: { video: 'background' | 'plane'; time: number } | null
-  setTrimScrub: (value: { video: 'background' | 'plane'; time: number } | null) => void
+  trimScrub:
+  | { video: 'background'; time: number }
+  | { video: 'plane'; time: number }
+  | { video: 'pane'; paneId: string; time: number }
+  | null
+  setTrimScrub: (
+    value:
+      | { video: 'background'; time: number }
+      | { video: 'plane'; time: number }
+      | { video: 'pane'; paneId: string; time: number }
+      | null
+  ) => void
   /** Which trim editor modal is open (single owner). null = closed. */
-  trimEditorOpen: 'background' | 'plane' | null
-  setTrimEditorOpen: (v: 'background' | 'plane' | null) => void
+  trimEditorOpen: 'background' | 'plane' | { type: 'pane'; paneId: string } | null
+  setTrimEditorOpen: (v: 'background' | 'plane' | { type: 'pane'; paneId: string } | null) => void
   /** Current camera in flyover edit mode; used to show if Start/End buttons are "at" keyframe. */
   flyoverEditCamera: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null
   setFlyoverEditCamera: (v: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null) => void

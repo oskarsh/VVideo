@@ -13,31 +13,47 @@ body {
   min-height: 100vh;
 }
 
-/* Minimal range sliders */
+/* Minimal range sliders — transparent input, thin track, dot thumb */
 input[type='range'] {
-  @apply w-full appearance-none bg-white/10 rounded-full accent-white/80;
-  height: 24px;
-  min-height: 24px;
-}
-
-input[type='range']::-webkit-slider-thumb {
-  @apply appearance-none rounded-full bg-white/90 cursor-pointer border-0;
-  width: 14px;
-  height: 14px;
-}
-
-input[type='range']::-moz-range-thumb {
-  @apply rounded-full bg-white/90 cursor-pointer border-0;
-  width: 14px;
-  height: 14px;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px;       /* hit area only, no visible background */
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
 }
 
 input[type='range']::-webkit-slider-runnable-track {
-  @apply bg-white/10 rounded-full;
-  height: 6px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 1px;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  border: 0;
+  margin-top: -4px;   /* center on 2px track: -(10-2)/2 */
 }
 
 input[type='range']::-moz-range-track {
-  @apply bg-white/10 rounded-full;
-  height: 6px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 1px;
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  border: 0;
 }

@@ -11,6 +11,7 @@ import { WelcomeModal, useWelcome } from '@/components/WelcomeModal'
 import { AboutModal } from '@/components/AboutModal'
 import { TrimEditorSlot } from '@/components/TrimEditorSlot'
 import { ExportDialog } from '@/components/ExportDialog'
+import { ScreenshotDialog } from '@/components/ScreenshotDialog'
 import { VVideoLogo } from '@/components/VVideoLogo'
 import { PresetDropdown } from '@/components/PresetDropdown'
 import { StaticTextOverlay } from '@/components/StaticTextOverlay'
@@ -294,6 +295,7 @@ export default function App() {
           <PresetDropdown />
           <UndoRedoButtons />
           <ResetProjectButton />
+          <ScreenshotButton />
           <ExportButton />
         </div>
       </header>
@@ -712,6 +714,87 @@ function ExportButton() {
           sceneCount={project.scenes.length}
           onClose={() => setExportDialogOpen(false)}
           onExport={runExport}
+        />
+      )}
+    </>
+  )
+}
+
+function ScreenshotButton() {
+  const isExporting = useStore((s) => s.isExporting)
+  const [screenshotDialogOpen, setScreenshotDialogOpen] = useState(false)
+  const [scale, setScale] = useState(480)
+  const [isCapturing, setIsCapturing] = useState(false)
+  const setExporting = useStore((s) => s.setExporting)
+  const setExportHeight = useStore((s) => s.setExportHeight)
+  const project = useStore((s) => s.project)
+
+  const captureScreenshot = async () => {
+    if (isExporting) return
+    setIsCapturing(true)
+    setScreenshotDialogOpen(false)
+
+    const needsResize = scale !== 480
+    if (needsResize) {
+      setExportHeight(scale)
+      setExporting(true)
+      await new Promise((r) => setTimeout(r, 150))
+    }
+
+    const canvas = document.querySelector('canvas')
+    if (!canvas) {
+      if (needsResize) {
+        setExporting(false)
+        setExportHeight(720)
+      }
+      setIsCapturing(false)
+      return
+    }
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          if (needsResize) {
+            setExporting(false)
+            setExportHeight(720)
+          }
+          setIsCapturing(false)
+          return
+        }
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `${project.name || 'screenshot'}.png`
+        a.click()
+        URL.revokeObjectURL(a.href)
+        if (needsResize) {
+          setExporting(false)
+          setExportHeight(720)
+        }
+        setIsCapturing(false)
+      },
+      'image/png',
+      1
+    )
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setScreenshotDialogOpen(true)}
+        disabled={isExporting || isCapturing}
+        className="px-3 py-1.5 rounded-md text-sm font-medium bg-white/10 text-white/80 hover:bg-white/20 disabled:opacity-50"
+      >
+        {isCapturing ? 'Capturing…' : 'Screenshot'}
+      </button>
+      {screenshotDialogOpen && (
+        <ScreenshotDialog
+          open={screenshotDialogOpen}
+          onClose={() => setScreenshotDialogOpen(false)}
+          scale={scale}
+          setScale={setScale}
+          onCapture={captureScreenshot}
+          isCapturing={isCapturing}
         />
       )}
     </>
