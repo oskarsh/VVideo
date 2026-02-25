@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.11 — 2026-02-25
+
+**Choose WebM or MP4 export format.**
+
+- Export dialog now lets you pick WebM or MP4 as the output format.
+- MP4 is supported in Safari; Chrome and Firefox use WebM.
+- Panel-only (transparent) export stays WebM only, since MP4 does not support alpha.
+
+---
+
+## 2.0.10 — 2026-02-25
+
+**Fix handheld camera shake in smooth frame-by-frame export.**
+
+- Handheld camera movement now renders correctly when using smooth export (frame-by-frame).
+- Playback is started during export so the render loop behaves like live playback; handheld shake is applied correctly.
+
+---
+
 ## 2.0.9 — 2026-02-25
 
 **Fix handheld camera preview mismatch.**

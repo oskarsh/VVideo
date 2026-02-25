@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Play, Pause, Repeat, SkipForward, SkipBack, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useStore } from '@/store'
 import { DEFAULT_GLOBAL_KEYFRAMES } from '@/lib/globalEffects'
@@ -20,7 +21,7 @@ import { StaticTextOverlay } from '@/components/StaticTextOverlay'
 import { getPlaneMedia } from '@/types'
 import { getFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyoverKeyframes } from '@/lib/flyover'
-import { FRAME_BY_FRAME_RESOLUTION_THRESHOLD } from '@/constants/export'
+import { FRAME_BY_FRAME_RESOLUTION_THRESHOLD, type ExportFormat } from '@/constants/export'
 
 function isMediaDrag(e: React.DragEvent | DragEvent): boolean {
   if (!e.dataTransfer?.types.includes('Files')) return false
@@ -117,9 +118,13 @@ function PlaybackLoop() {
   useEffect(() => {
     if (!isPlaying || !scene) return
     const tick = (now: number) => {
+      const state = useStore.getState()
+      if (state.isFrameByFrameExporting) {
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
       const dt = (now - lastRef.current) / 1000
       lastRef.current = now
-      const state = useStore.getState()
       const time = state.currentTime
       const sceneStart = state.project.scenes
         .slice(0, state.currentSceneIndex)
@@ -619,6 +624,10 @@ function ExportButton() {
   const [resolution, setResolution] = useState(720)
   const [frameByFrame, setFrameByFrame] = useState(false)
   const [exportPerScene, setExportPerScene] = useState(false)
+  const [format, setFormat] = useState<ExportFormat>('webm')
+  useEffect(() => {
+    if (content === 'plane-only' && format === 'mp4') setFormat('webm')
+  }, [content, format])
   const setExporting = useStore((s) => s.setExporting)
   const setExportRenderMode = useStore((s) => s.setExportRenderMode)
   const setExportHeight = useStore((s) => s.setExportHeight)
@@ -626,6 +635,7 @@ function ExportButton() {
   const project = useStore((s) => s.project)
   const setCurrentTime = useStore((s) => s.setCurrentTime)
   const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
+  const setFrameByFrameExporting = useStore((s) => s.setFrameByFrameExporting)
   const hasPlaneMedia = !!getPlaneMedia(project)
 
   const runExport = async () => {
@@ -634,16 +644,21 @@ function ExportButton() {
     setExporting(true)
     setExportDialogOpen(false)
     const useFrameByFrame = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD || frameByFrame
-    if (!useFrameByFrame) setPlaying(true)
+    setPlaying(true)
+    if (useFrameByFrame) setFrameByFrameExporting(true)
     try {
       // Let canvas remount with alpha if plane-only
       await new Promise((r) => setTimeout(r, 100))
       const canvas = document.querySelector('[data-canvas-root] canvas') as HTMLCanvasElement | null
       if (!canvas) return
       const stream = canvas.captureStream(framerate)
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-        ? 'video/webm;codecs=vp9'
-        : 'video/webm'
+      const useMp4 = format === 'mp4' && content !== 'plane-only' && MediaRecorder.isTypeSupported('video/mp4')
+      const mime = useMp4
+        ? 'video/mp4'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : 'video/webm'
+      const ext = useMp4 ? '.mp4' : '.webm'
       const suffix = content === 'plane-only' ? '-panel' : ''
       const baseName = project.name || 'export'
 
@@ -669,8 +684,10 @@ function ExportButton() {
           for (let i = 0; i < segmentFrames; i++) {
             const frameStart = performance.now()
             const t = startTime + Math.min(i / framerate, durationSeconds)
-            setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
-            setCurrentTime(t)
+            flushSync(() => {
+              setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
+              setCurrentTime(t)
+            })
             await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
             const elapsed = performance.now() - frameStart
             const wait = Math.max(0, frameDurationMs - elapsed)
@@ -682,7 +699,7 @@ function ExportButton() {
         recorder.stop()
         await new Promise<void>((resolve) => {
           recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: 'video/webm' })
+            const blob = new Blob(chunks, { type: mime })
             const a = document.createElement('a')
             a.href = URL.createObjectURL(blob)
             a.download = downloadName
@@ -700,7 +717,7 @@ function ExportButton() {
           await recordSegment(
             sceneStartTime,
             scene.durationSeconds,
-            `${baseName}${suffix}-scene-${i + 1}.webm`
+            `${baseName}${suffix}-scene-${i + 1}${ext}`
           )
           sceneStartTime += scene.durationSeconds
         }
@@ -716,10 +733,10 @@ function ExportButton() {
         const chunks: Blob[] = []
         recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
         recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'video/webm' })
+          const blob = new Blob(chunks, { type: mime })
           const a = document.createElement('a')
           a.href = URL.createObjectURL(blob)
-          a.download = `${baseName}${suffix}.webm`
+          a.download = `${baseName}${suffix}${ext}`
           a.click()
           setTimeout(() => URL.revokeObjectURL(a.href), 1000)
         }
@@ -730,8 +747,10 @@ function ExportButton() {
           for (let i = 0; i < totalFrames; i++) {
             const frameStart = performance.now()
             const t = Math.min(i / framerate, totalDuration)
-            setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
-            setCurrentTime(t)
+            flushSync(() => {
+              setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
+              setCurrentTime(t)
+            })
             await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
             const elapsed = performance.now() - frameStart
             const wait = Math.max(0, frameDurationMs - elapsed)
@@ -746,6 +765,7 @@ function ExportButton() {
       setExporting(false)
       setExportRenderMode('full')
       setPlaying(false)
+      setFrameByFrameExporting(false)
     }
   }
 
@@ -772,6 +792,8 @@ function ExportButton() {
           setFrameByFrame={setFrameByFrame}
           content={content}
           setContent={setContent}
+          format={format}
+          setFormat={setFormat}
           hasPlaneMedia={hasPlaneMedia}
           exportPerScene={exportPerScene}
           setExportPerScene={setExportPerScene}

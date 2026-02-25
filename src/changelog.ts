@@ -16,6 +16,25 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '2.0.11',
+    date: '2026-02-25',
+    summary: 'Choose WebM or MP4 export format.',
+    items: [
+      'Export dialog now lets you pick WebM or MP4 as the output format.',
+      'MP4 is supported in Safari; Chrome and Firefox use WebM.',
+      'Panel-only (transparent) export stays WebM only, since MP4 does not support alpha.',
+    ],
+  },
+  {
+    version: '2.0.10',
+    date: '2026-02-25',
+    summary: 'Fix handheld camera shake in smooth frame-by-frame export.',
+    items: [
+      'Handheld camera movement now renders correctly when using smooth export (frame-by-frame).',
+      'Playback is started during export so the render loop behaves like live playback; handheld shake is applied correctly.',
+    ],
+  },
+  {
     version: '2.0.9',
     date: '2026-02-25',
     summary: 'Fix handheld camera preview mismatch.',

@@ -19,7 +19,7 @@ Compose scenes with background + panel videos, flyover cameras, timeline automat
 | **Background** | Video file, or generated texture: Gradient, Terrain, Noise, or Dots. Continuous background mode plays the video uninterrupted across scenes. |
 | **Example assets** | Click-to-use background videos and panel clips built into the sidebar. |
 | **Floating transport bar** | Play, Loop, Jump to scene start/next, Set camera keyframe at playhead, live camera coordinates display. |
-| **Export** | In-browser WebM (VP9 when supported). Resolutions: 480p, 720p, 1080p, 2K, 4K. Per-scene export (one file per scene). Full composite or panel-only (transparent). Frame-by-frame rendering for 2K/4K. |
+| **Export** | In-browser WebM or MP4. Resolutions: 480p, 720p, 1080p, 2K, 4K. Per-scene export (one file per scene). Full composite or panel-only (transparent, WebM only). Frame-by-frame rendering for 2K/4K. |
 | **Screenshot** | Capture the current canvas frame as PNG at any resolution. |
 | **Undo / Redo** | Full history for all project edits (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z). |
 

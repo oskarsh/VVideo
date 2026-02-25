@@ -3,8 +3,10 @@ import {
   EXPORT_FRAMERATES,
   EXPORT_BITRATES,
   EXPORT_RESOLUTIONS,
+  EXPORT_FORMATS,
   FRAME_BY_FRAME_RESOLUTION_THRESHOLD,
 } from '@/constants/export'
+import type { ExportFormat } from '@/constants/export'
 
 export function ExportDialog({
   open,
@@ -18,6 +20,8 @@ export function ExportDialog({
   setFrameByFrame,
   content,
   setContent,
+  format,
+  setFormat,
   hasPlaneMedia,
   exportPerScene,
   setExportPerScene,
@@ -36,6 +40,8 @@ export function ExportDialog({
   setFrameByFrame: (v: boolean) => void
   content: 'full' | 'plane-only'
   setContent: (c: 'full' | 'plane-only') => void
+  format: ExportFormat
+  setFormat: (f: ExportFormat) => void
   hasPlaneMedia: boolean
   exportPerScene: boolean
   setExportPerScene: (v: boolean) => void
@@ -44,6 +50,8 @@ export function ExportDialog({
   onExport: () => void
 }) {
   const useFrameByFrameForRes = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD
+  const mp4Supported = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/mp4')
+  const mp4Disabled = content === 'plane-only' || !mp4Supported
 
   return (
     <Modal
@@ -131,6 +139,35 @@ export function ExportDialog({
         </div>
         <div>
           <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
+            Format
+          </label>
+          <div className="flex gap-2">
+            {EXPORT_FORMATS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => !(value === 'mp4' && mp4Disabled) && setFormat(value)}
+                disabled={value === 'mp4' && mp4Disabled}
+                className={`flex-1 px-2 py-2 rounded text-sm font-medium ${format === value ? 'bg-white text-black' : value === 'mp4' && mp4Disabled ? 'bg-white/5 text-white/40 cursor-not-allowed' : 'bg-white/10 text-white/80 hover:bg-white/20'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {content === 'plane-only' && (
+            <p className="text-xs text-white/50 mt-1.5">
+              MP4 does not support transparency; WebM only for panel-only export.
+            </p>
+          )}
+          {content === 'full' && !mp4Supported && (
+            <p className="text-xs text-white/50 mt-1.5">
+              MP4 not supported in this browser; use WebM.
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-1.5">
             Export content
           </label>
           <div className="space-y-2">
@@ -145,7 +182,7 @@ export function ExportDialog({
               <div>
                 <span className="text-sm font-medium text-white">Full composite</span>
                 <p className="text-xs text-white/50 mt-0.5">
-                  Background + panel video, camera, effects (WebM)
+                  Background + panel video, camera, effects
                 </p>
               </div>
             </label>
@@ -185,7 +222,7 @@ export function ExportDialog({
             <div>
               <span className="text-sm font-medium text-white">Export each scene separately</span>
               <p className="text-xs text-white/50 mt-0.5">
-                Saves one file per scene (e.g. my-video-scene-1.webm, my-video-scene-2.webm).
+                Saves one file per scene (e.g. my-video-scene-1.{format}, my-video-scene-2.{format}).
               </p>
             </div>
           </label>

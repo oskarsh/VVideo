@@ -4,7 +4,7 @@ import { useStore } from '@/store'
 import { sectionHeadingClass, smallLabelClass } from '@/constants/ui'
 import { EXAMPLE_CLIP_PATHS } from '@/constants/urls'
 import { parseNum, clamp } from '@/utils/numbers'
-import type { Pane, PlaneMedia, Scene, SceneText } from '@/types'
+import type { Pane, PlaneMedia, SceneText } from '@/types'
 import { VideoThumbnail } from './VideoThumbnail'
 
 function getMediaTypeFromFile(file: File): 'video' | 'image' {
@@ -150,7 +150,6 @@ export function PanesPanel() {
   const updatePane = useStore((s) => s.updatePane)
   const reorderPanes = useStore((s) => s.reorderPanes)
   const updateScene = useStore((s) => s.updateScene)
-  const setPaneTrim = useStore((s) => s.setPaneTrim)
   const setTrimEditorOpen = useStore((s) => s.setTrimEditorOpen)
   const panes = project.panes ?? []
   const scene = project.scenes[currentSceneIndex]
@@ -266,7 +265,6 @@ export function PanesPanel() {
               key={pane.id}
               pane={pane}
               index={index}
-              scene={scene}
               onUpdate={(patch) => updatePane(pane.id, patch)}
               onRemove={() => {
                 if (pane.media?.url?.startsWith('blob:')) URL.revokeObjectURL(pane.media.url)
@@ -277,9 +275,7 @@ export function PanesPanel() {
               onSelectFile={() => fileInputRefs.current[pane.id]?.click()}
               fileInputRef={(el) => { fileInputRefs.current[pane.id] = el }}
               onFileChange={(e) => handlePaneFile(pane.id, e)}
-              setPaneTrim={setPaneTrim}
               setTrimEditorOpen={setTrimEditorOpen}
-              currentSceneIndex={currentSceneIndex}
             />
           ))}
           {texts.map((text, index) => (
@@ -349,7 +345,6 @@ function TextLayerItem({
 function PaneItem({
   pane,
   index,
-  scene,
   onUpdate,
   onRemove,
   onMoveUp,
@@ -357,13 +352,10 @@ function PaneItem({
   onSelectFile,
   fileInputRef,
   onFileChange,
-  setPaneTrim,
   setTrimEditorOpen,
-  currentSceneIndex,
 }: {
   pane: Pane
   index: number
-  scene: Scene
   onUpdate: (patch: Partial<Pane>) => void
   onRemove: () => void
   onMoveUp?: () => void
@@ -371,11 +363,8 @@ function PaneItem({
   onSelectFile: () => void
   fileInputRef: (el: HTMLInputElement | null) => void
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-  setPaneTrim: (sceneIndex: number, paneId: string, trim: { start: number; end: number } | null, endClaimed?: boolean) => void
   setTrimEditorOpen: (v: 'background' | 'plane' | { type: 'pane'; paneId: string } | null) => void
-  currentSceneIndex: number
 }) {
-  const paneTrim = scene.paneTrims?.[pane.id] ?? null
   const isVideo = pane.media?.type === 'video'
 
   return (
@@ -425,50 +414,7 @@ function PaneItem({
               Edit
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-1">
-            <label className="text-[10px]">
-              Start
-              <input
-                type="number"
-                min={0}
-                step={0.1}
-                value={paneTrim?.start ?? ''}
-                placeholder="0"
-                onChange={(e) => {
-                  const v = e.target.value === '' ? null : parseFloat(e.target.value)
-                  if (v === null) {
-                    setPaneTrim(currentSceneIndex, pane.id, null)
-                    return
-                  }
-                  const prev = paneTrim
-                  const end = prev?.end ?? v
-                  setPaneTrim(currentSceneIndex, pane.id, { start: v, end: Math.max(v, end) })
-                }}
-                className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10 text-white text-xs"
-              />
-            </label>
-            <label className="text-[10px]">
-              End
-              <input
-                type="number"
-                min={0}
-                step={0.1}
-                value={paneTrim?.end ?? ''}
-                placeholder="full"
-                onChange={(e) => {
-                  const v = e.target.value === '' ? null : parseFloat(e.target.value)
-                  if (v === null && !paneTrim?.start) {
-                    setPaneTrim(currentSceneIndex, pane.id, null)
-                    return
-                  }
-                  const start = paneTrim?.start ?? 0
-                  if (v === null) setPaneTrim(currentSceneIndex, pane.id, null)
-                  else setPaneTrim(currentSceneIndex, pane.id, { start, end: Math.max(start, v) }, true)
-                }}
-                className="block w-full mt-0.5 px-1.5 py-1 rounded bg-black/30 border border-white/10 text-white text-xs"
-              />
-            </label>
-          </div>
+          {/* Start/End inputs hidden; use Edit to open trim editor modal */}
         </div>
       )}
       <SliderRow

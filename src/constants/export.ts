@@ -22,3 +22,11 @@ export const EXPORT_RESOLUTIONS = [
 
 /** Resolutions at or above this use frame-by-frame export (smoother, may be slower). */
 export const FRAME_BY_FRAME_RESOLUTION_THRESHOLD = 1440
+
+/** Export format options. MP4 does not support transparency (plane-only). */
+export type ExportFormat = 'webm' | 'mp4'
+
+export const EXPORT_FORMATS: { value: ExportFormat; label: string }[] = [
+  { value: 'webm', label: 'WebM' },
+  { value: 'mp4', label: 'MP4' },
+]

@@ -58,6 +58,9 @@ interface EditorState {
   /** Export output height in pixels (e.g. 480, 720, 1080, 1440, 2160). Used when isExporting. */
   exportHeight: number
   setExportHeight: (h: number) => void
+  /** When true, playback loop runs but does not advance time (frame-by-frame export controls it). */
+  isFrameByFrameExporting: boolean
+  setFrameByFrameExporting: (v: boolean) => void
   historyPast: HistorySnapshot[]
   historyFuture: HistorySnapshot[]
 
@@ -155,6 +158,8 @@ export const useStore = create<EditorState>((set) => ({
   exportRenderMode: 'full',
   exportHeight: 720,
   setExportHeight: (h) => set({ exportHeight: h }),
+  isFrameByFrameExporting: false,
+  setFrameByFrameExporting: (v) => set({ isFrameByFrameExporting: v }),
   historyPast: [],
   historyFuture: [],
 
