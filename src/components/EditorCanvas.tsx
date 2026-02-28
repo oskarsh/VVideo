@@ -22,6 +22,16 @@ import { DitherEffect } from '@/effects/DitherEffect'
 import { LensDistortion } from '@/effects/LensDistortionEffect'
 import { BlockGlitchEffect } from '@/effects/BlockGlitchEffect'
 import { NoiseGlitchEffect } from '@/effects/NoiseGlitchEffect'
+import { SwirlEffect } from '@/effects/SwirlEffect'
+import { WaveEffect } from '@/effects/WaveEffect'
+import { PinchEffect } from '@/effects/PinchEffect'
+import { KaleidoscopeEffect } from '@/effects/KaleidoscopeEffect'
+import { MeltEffect } from '@/effects/MeltEffect'
+import { RadialChromaticEffect } from '@/effects/RadialChromaticEffect'
+import { FisheyeEffect } from '@/effects/FisheyeEffect'
+import { PixelShatterEffect } from '@/effects/PixelShatterEffect'
+import { TunnelEffect } from '@/effects/TunnelEffect'
+import { NoiseWarpEffect } from '@/effects/NoiseWarpEffect'
 import type {
   Scene as SceneType,
   SceneEffectZoom,
@@ -34,11 +44,23 @@ import type {
   SceneEffectGlitch,
   SceneEffectVignette,
   SceneEffectScanline,
+  SceneEffectSwirl,
+  SceneEffectWave,
+  SceneEffectPinch,
+  SceneEffectKaleidoscope,
+  SceneEffectMelt,
+  SceneEffectRadialChromatic,
+  SceneEffectFisheye,
+  SceneEffectPixelShatter,
+  SceneEffectTunnel,
+  SceneEffectNoiseWarp,
   SceneText,
   Pane,
   BackgroundTexture,
 } from '@/types'
 import { getPlaneMedia, getPanesForRender } from '@/types'
+import { notifyVideoSeeked, getCurrentGeneration } from '@/lib/exportVideoSync'
+import { ProfiledSection } from '@/components/ProfiledSection'
 import { getHandheldOffsets } from '@/utils/smoothNoise'
 import { getGlobalEffectStateAtTime } from '@/lib/globalEffects'
 import { generateBackgroundTextureDataUrl } from '@/lib/backgroundTexture'
@@ -72,6 +94,7 @@ function BackgroundVideo({
   const meshRef = useRef<THREE.Mesh>(null)
   const [texture, setTexture] = useState<THREE.VideoTexture | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const isFrameByFrameExporting = useStore((s) => s.isFrameByFrameExporting)
 
   useEffect(() => {
     const video = document.createElement('video')
@@ -99,33 +122,46 @@ function BackgroundVideo({
   useFrame(() => {
     const video = videoRef.current
     if (!video || video.readyState < 2) return
+    let targetTime: number
     if (scrubTime != null) {
-      video.currentTime = Math.max(0, Math.min(scrubTime, video.duration || 0))
-      return
-    }
-    const dur = Math.max(0.001, video.duration || 1)
-    if (_continuous && _globalTime != null) {
-      const effectiveTime = _globalTime * Math.max(0.1, speed)
-      video.currentTime = effectiveTime % dur
-      return
-    }
-    if (playbackMode === 'fitScene' && sceneDuration > 0) {
-      if (trim) {
-        const span = Math.max(0.001, trim.end - trim.start)
-        const t = Math.min(1, sceneLocalTime / sceneDuration)
-        video.currentTime = trim.start + (t * span) % span
-      } else {
-        const t = Math.min(1, sceneLocalTime / sceneDuration)
-        video.currentTime = (t * dur) % dur
-      }
+      targetTime = Math.max(0, Math.min(scrubTime, video.duration || 0))
     } else {
-      const effectiveTime = sceneLocalTime * Math.max(0.1, speed)
-      if (trim) {
-        const span = Math.max(0.001, trim.end - trim.start)
-        video.currentTime = trim.start + (effectiveTime % span)
+      const dur = Math.max(0.001, video.duration || 1)
+      if (_continuous && _globalTime != null) {
+        targetTime = (_globalTime * Math.max(0.1, speed)) % dur
+      } else if (playbackMode === 'fitScene' && sceneDuration > 0) {
+        if (trim) {
+          const span = Math.max(0.001, trim.end - trim.start)
+          const t = Math.min(1, sceneLocalTime / sceneDuration)
+          targetTime = (trim.start + (t * span)) % span
+        } else {
+          const t = Math.min(1, sceneLocalTime / sceneDuration)
+          targetTime = (t * dur) % dur
+        }
       } else {
-        video.currentTime = effectiveTime % dur
+        const effectiveTime = sceneLocalTime * Math.max(0.1, speed)
+        if (trim) {
+          const span = Math.max(0.001, trim.end - trim.start)
+          targetTime = trim.start + (effectiveTime % span)
+        } else {
+          targetTime = effectiveTime % dur
+        }
       }
+    }
+    if (isFrameByFrameExporting && Math.abs(video.currentTime - targetTime) > 0.001) {
+      if (!video.seeking) {
+        const gen = getCurrentGeneration()
+        const onSeeked = () => {
+          video.removeEventListener('seeked', onSeeked)
+          notifyVideoSeeked(gen)
+        }
+        video.addEventListener('seeked', onSeeked)
+        video.currentTime = targetTime
+      }
+    } else if (isFrameByFrameExporting && !video.seeking) {
+      notifyVideoSeeked(getCurrentGeneration())
+    } else if (!isFrameByFrameExporting) {
+      video.currentTime = targetTime
     }
   })
 
@@ -256,6 +292,7 @@ function PlaneVideo({
   const [texture, setTexture] = useState<THREE.VideoTexture | null>(null)
   const [videoAspect, setVideoAspect] = useState<number>(16 / 9)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const isFrameByFrameExporting = useStore((s) => s.isFrameByFrameExporting)
 
   useEffect(() => {
     const video = document.createElement('video')
@@ -290,28 +327,44 @@ function PlaneVideo({
   useFrame(() => {
     const video = videoRef.current
     if (!video || video.readyState < 2) return
+    let targetTime: number
     if (scrubTime != null) {
-      video.currentTime = Math.max(0, Math.min(scrubTime, video.duration || 0))
-      return
-    }
-    const dur = Math.max(0.001, video.duration || 1)
-    if (playbackMode === 'fitScene' && sceneDuration > 0) {
-      if (trim) {
-        const span = Math.max(0.001, trim.end - trim.start)
-        const t = Math.min(1, sceneLocalTime / sceneDuration)
-        video.currentTime = trim.start + (t * span) % span
-      } else {
-        const t = Math.min(1, sceneLocalTime / sceneDuration)
-        video.currentTime = (t * dur) % dur
-      }
+      targetTime = Math.max(0, Math.min(scrubTime, video.duration || 0))
     } else {
-      const effectiveTime = sceneLocalTime * Math.max(0.1, speed)
-      if (trim) {
-        const span = Math.max(0.001, trim.end - trim.start)
-        video.currentTime = trim.start + (effectiveTime % span)
+      const dur = Math.max(0.001, video.duration || 1)
+      if (playbackMode === 'fitScene' && sceneDuration > 0) {
+        if (trim) {
+          const span = Math.max(0.001, trim.end - trim.start)
+          const t = Math.min(1, sceneLocalTime / sceneDuration)
+          targetTime = (trim.start + (t * span)) % span
+        } else {
+          const t = Math.min(1, sceneLocalTime / sceneDuration)
+          targetTime = (t * dur) % dur
+        }
       } else {
-        video.currentTime = effectiveTime % dur
+        const effectiveTime = sceneLocalTime * Math.max(0.1, speed)
+        if (trim) {
+          const span = Math.max(0.001, trim.end - trim.start)
+          targetTime = trim.start + (effectiveTime % span)
+        } else {
+          targetTime = effectiveTime % dur
+        }
       }
+    }
+    if (isFrameByFrameExporting && Math.abs(video.currentTime - targetTime) > 0.001) {
+      if (!video.seeking) {
+        const gen = getCurrentGeneration()
+        const onSeeked = () => {
+          video.removeEventListener('seeked', onSeeked)
+          notifyVideoSeeked(gen)
+        }
+        video.addEventListener('seeked', onSeeked)
+        video.currentTime = targetTime
+      }
+    } else if (isFrameByFrameExporting && !video.seeking) {
+      notifyVideoSeeked(getCurrentGeneration())
+    } else if (!isFrameByFrameExporting) {
+      video.currentTime = targetTime
     }
   })
 
@@ -566,7 +619,15 @@ function CameraRig({
     )
 
   useFrame((_state, _delta) => {
-    if (disabled) return
+    if (disabled) {
+      // When editing (orbit/WASD control the camera), still apply global FOV override
+      // so it persists when the user moves the camera instead of resetting.
+      if (fovOverride != null && Number.isFinite(fovOverride) && 'fov' in camera) {
+        camera.fov = fovOverride
+        camera.updateProjectionMatrix()
+      }
+      return
+    }
     let pos: [number, number, number]
     let rot: [number, number, number]
     let fov = FOV_DEG
@@ -955,6 +1016,16 @@ function SceneContent() {
   const globalScanline = getGlobalEffectStateAtTime(project, 'scanline', currentTime)
   const globalDither = getGlobalEffectStateAtTime(project, 'dither', currentTime)
   const globalCamera = getGlobalEffectStateAtTime(project, 'camera', currentTime)
+  const globalSwirl = getGlobalEffectStateAtTime(project, 'swirl', currentTime)
+  const globalWave = getGlobalEffectStateAtTime(project, 'wave', currentTime)
+  const globalPinch = getGlobalEffectStateAtTime(project, 'pinch', currentTime)
+  const globalKaleidoscope = getGlobalEffectStateAtTime(project, 'kaleidoscope', currentTime)
+  const globalMelt = getGlobalEffectStateAtTime(project, 'melt', currentTime)
+  const globalRadialChromatic = getGlobalEffectStateAtTime(project, 'radialChromatic', currentTime)
+  const globalFisheye = getGlobalEffectStateAtTime(project, 'fisheye', currentTime)
+  const globalPixelShatter = getGlobalEffectStateAtTime(project, 'pixelShatter', currentTime)
+  const globalTunnel = getGlobalEffectStateAtTime(project, 'tunnel', currentTime)
+  const globalNoiseWarp = getGlobalEffectStateAtTime(project, 'noiseWarp', currentTime)
 
   const grainEffect = scene.effects.find((e): e is SceneEffectGrain => e.type === 'grain')
   const grainStart = grainEffect?.startOpacity ?? (grainEffect as { opacity?: number })?.opacity ?? 0.1
@@ -1114,6 +1185,77 @@ function SceneContent() {
   const scanlineEnabled =
     globalScanline != null ? (globalScanline.enabled as boolean) : (scanlineEffect?.enabled ?? false)
 
+  const ar = size.width / size.height
+
+  // --- Swirl ---
+  const swirlEffect = scene.effects.find((e): e is SceneEffectSwirl => e.type === 'swirl')
+  const swirlEnabled = globalSwirl != null ? (globalSwirl.enabled as boolean) : (swirlEffect?.enabled ?? false)
+  const swirlStrength = globalSwirl != null ? (globalSwirl.strengthStart as number) : lerp(swirlEffect?.strengthStart ?? 2, swirlEffect?.strengthEnd ?? 2)
+  const swirlRadius = globalSwirl != null ? (globalSwirl.radiusStart as number) : lerp(swirlEffect?.radiusStart ?? 0.5, swirlEffect?.radiusEnd ?? 0.5)
+  const swirlCenterX = globalSwirl != null ? (globalSwirl.centerXStart as number) : lerp(swirlEffect?.centerXStart ?? 0.5, swirlEffect?.centerXEnd ?? 0.5)
+  const swirlCenterY = globalSwirl != null ? (globalSwirl.centerYStart as number) : lerp(swirlEffect?.centerYStart ?? 0.5, swirlEffect?.centerYEnd ?? 0.5)
+
+  // --- Wave ---
+  const waveEffect = scene.effects.find((e): e is SceneEffectWave => e.type === 'wave')
+  const waveEnabled = globalWave != null ? (globalWave.enabled as boolean) : (waveEffect?.enabled ?? false)
+  const waveAmpX = globalWave != null ? (globalWave.amplitudeXStart as number) : lerp(waveEffect?.amplitudeXStart ?? 0.02, waveEffect?.amplitudeXEnd ?? 0.02)
+  const waveAmpY = globalWave != null ? (globalWave.amplitudeYStart as number) : lerp(waveEffect?.amplitudeYStart ?? 0.02, waveEffect?.amplitudeYEnd ?? 0.02)
+  const waveFreqX = globalWave != null ? (globalWave.frequencyXStart as number) : lerp(waveEffect?.frequencyXStart ?? 5, waveEffect?.frequencyXEnd ?? 5)
+  const waveFreqY = globalWave != null ? (globalWave.frequencyYStart as number) : lerp(waveEffect?.frequencyYStart ?? 5, waveEffect?.frequencyYEnd ?? 5)
+  const waveSpeed = globalWave != null ? (globalWave.speedStart as number) : lerp(waveEffect?.speedStart ?? 1, waveEffect?.speedEnd ?? 1)
+
+  // --- Pinch ---
+  const pinchEffect = scene.effects.find((e): e is SceneEffectPinch => e.type === 'pinch')
+  const pinchEnabled = globalPinch != null ? (globalPinch.enabled as boolean) : (pinchEffect?.enabled ?? false)
+  const pinchStrength = globalPinch != null ? (globalPinch.strengthStart as number) : lerp(pinchEffect?.strengthStart ?? 0.5, pinchEffect?.strengthEnd ?? 0.5)
+  const pinchRadius = globalPinch != null ? (globalPinch.radiusStart as number) : lerp(pinchEffect?.radiusStart ?? 0.5, pinchEffect?.radiusEnd ?? 0.5)
+  const pinchCenterX = globalPinch != null ? (globalPinch.centerXStart as number) : lerp(pinchEffect?.centerXStart ?? 0.5, pinchEffect?.centerXEnd ?? 0.5)
+  const pinchCenterY = globalPinch != null ? (globalPinch.centerYStart as number) : lerp(pinchEffect?.centerYStart ?? 0.5, pinchEffect?.centerYEnd ?? 0.5)
+
+  // --- Kaleidoscope ---
+  const kalEffect = scene.effects.find((e): e is SceneEffectKaleidoscope => e.type === 'kaleidoscope')
+  const kalEnabled = globalKaleidoscope != null ? (globalKaleidoscope.enabled as boolean) : (kalEffect?.enabled ?? false)
+  const kalSegments = globalKaleidoscope != null ? (globalKaleidoscope.segmentsStart as number) : lerp(kalEffect?.segmentsStart ?? 6, kalEffect?.segmentsEnd ?? 6)
+  const kalRotation = globalKaleidoscope != null ? (globalKaleidoscope.rotationStart as number) : lerp(kalEffect?.rotationStart ?? 0, kalEffect?.rotationEnd ?? 0)
+
+  // --- Melt ---
+  const meltEffect = scene.effects.find((e): e is SceneEffectMelt => e.type === 'melt')
+  const meltEnabled = globalMelt != null ? (globalMelt.enabled as boolean) : (meltEffect?.enabled ?? false)
+  const meltStrength = globalMelt != null ? (globalMelt.strengthStart as number) : lerp(meltEffect?.strengthStart ?? 0.1, meltEffect?.strengthEnd ?? 0.1)
+  const meltFrequency = globalMelt != null ? (globalMelt.frequencyStart as number) : lerp(meltEffect?.frequencyStart ?? 5, meltEffect?.frequencyEnd ?? 5)
+  const meltSpeed = globalMelt != null ? (globalMelt.speedStart as number) : lerp(meltEffect?.speedStart ?? 1, meltEffect?.speedEnd ?? 1)
+
+  // --- Radial Chromatic ---
+  const radChrEffect = scene.effects.find((e): e is SceneEffectRadialChromatic => e.type === 'radialChromatic')
+  const radChrEnabled = globalRadialChromatic != null ? (globalRadialChromatic.enabled as boolean) : (radChrEffect?.enabled ?? false)
+  const radChrStrength = globalRadialChromatic != null ? (globalRadialChromatic.strengthStart as number) : lerp(radChrEffect?.strengthStart ?? 0.05, radChrEffect?.strengthEnd ?? 0.05)
+  const radChrExponent = globalRadialChromatic != null ? (globalRadialChromatic.exponentStart as number) : lerp(radChrEffect?.exponentStart ?? 2, radChrEffect?.exponentEnd ?? 2)
+
+  // --- Fisheye ---
+  const fisheyeEffect = scene.effects.find((e): e is SceneEffectFisheye => e.type === 'fisheye')
+  const fisheyeEnabled = globalFisheye != null ? (globalFisheye.enabled as boolean) : (fisheyeEffect?.enabled ?? false)
+  const fisheyeStrength = globalFisheye != null ? (globalFisheye.strengthStart as number) : lerp(fisheyeEffect?.strengthStart ?? 3, fisheyeEffect?.strengthEnd ?? 3)
+
+  // --- Pixel Shatter ---
+  const psEffect = scene.effects.find((e): e is SceneEffectPixelShatter => e.type === 'pixelShatter')
+  const psEnabled = globalPixelShatter != null ? (globalPixelShatter.enabled as boolean) : (psEffect?.enabled ?? false)
+  const psScale = globalPixelShatter != null ? (globalPixelShatter.scaleStart as number) : lerp(psEffect?.scaleStart ?? 20, psEffect?.scaleEnd ?? 20)
+  const psStrength = globalPixelShatter != null ? (globalPixelShatter.strengthStart as number) : lerp(psEffect?.strengthStart ?? 0.05, psEffect?.strengthEnd ?? 0.05)
+
+  // --- Tunnel ---
+  const tunnelEffect = scene.effects.find((e): e is SceneEffectTunnel => e.type === 'tunnel')
+  const tunnelEnabled = globalTunnel != null ? (globalTunnel.enabled as boolean) : (tunnelEffect?.enabled ?? false)
+  const tunnelStrength = globalTunnel != null ? (globalTunnel.strengthStart as number) : lerp(tunnelEffect?.strengthStart ?? 0.3, tunnelEffect?.strengthEnd ?? 0.3)
+  const tunnelCenterX = globalTunnel != null ? (globalTunnel.centerXStart as number) : lerp(tunnelEffect?.centerXStart ?? 0.5, tunnelEffect?.centerXEnd ?? 0.5)
+  const tunnelCenterY = globalTunnel != null ? (globalTunnel.centerYStart as number) : lerp(tunnelEffect?.centerYStart ?? 0.5, tunnelEffect?.centerYEnd ?? 0.5)
+
+  // --- Noise Warp ---
+  const noiseWarpEffect = scene.effects.find((e): e is SceneEffectNoiseWarp => e.type === 'noiseWarp')
+  const noiseWarpEnabled = globalNoiseWarp != null ? (globalNoiseWarp.enabled as boolean) : (noiseWarpEffect?.enabled ?? false)
+  const noiseWarpStrength = globalNoiseWarp != null ? (globalNoiseWarp.strengthStart as number) : lerp(noiseWarpEffect?.strengthStart ?? 0.05, noiseWarpEffect?.strengthEnd ?? 0.05)
+  const noiseWarpScale = globalNoiseWarp != null ? (globalNoiseWarp.scaleStart as number) : lerp(noiseWarpEffect?.scaleStart ?? 5, noiseWarpEffect?.scaleEnd ?? 5)
+  const noiseWarpSpeed = globalNoiseWarp != null ? (globalNoiseWarp.speedStart as number) : lerp(noiseWarpEffect?.speedStart ?? 1, noiseWarpEffect?.speedEnd ?? 1)
+
   return (
     <>
       <CameraRig
@@ -1151,78 +1293,92 @@ function SceneContent() {
           <OrbitKeyboardSync controlsRef={orbitControlsRef} />
         </>
       )}
-      {!hideBackground &&
-        (project.backgroundVideoUrl ? (
-          <BackgroundVideo
-            url={project.backgroundVideoUrl}
-            trim={project.backgroundVideoContinuous ? null : scene.backgroundTrim}
-            sceneLocalTime={sceneLocalTime}
-            sceneDuration={sceneDuration}
-            viewAspect={project.aspectRatio[0] / project.aspectRatio[1]}
-            scrubTime={trimScrub?.video === 'background' ? trimScrub.time : null}
-            playbackMode={scene.backgroundVideoPlaybackMode ?? 'normal'}
-            speed={scene.backgroundVideoSpeed ?? 1}
-            continuous={project.backgroundVideoContinuous ?? false}
-            globalTime={currentTime}
-          />
-        ) : project.backgroundTexture ? (
-          <BackgroundTextureMesh
-            config={project.backgroundTexture}
-            viewAspect={project.aspectRatio[0] / project.aspectRatio[1]}
-            globalTime={currentTime}
-          />
-        ) : (
-          <mesh
-            position={[0, 0, -2]}
-            scale={[10 * (project.aspectRatio[0] / project.aspectRatio[1]), 10, 1]}
-          >
-            <planeGeometry args={[1, 1]} />
-            <meshBasicMaterial color="#1a1a1a" side={THREE.DoubleSide} />
-          </mesh>
-        ))}
+      {!hideBackground && (
+        <ProfiledSection id="background">
+          {project.backgroundVideoUrl ? (
+            <BackgroundVideo
+              url={project.backgroundVideoUrl}
+              trim={project.backgroundVideoContinuous ? null : scene.backgroundTrim}
+              sceneLocalTime={sceneLocalTime}
+              sceneDuration={sceneDuration}
+              viewAspect={project.aspectRatio[0] / project.aspectRatio[1]}
+              scrubTime={trimScrub?.video === 'background' ? trimScrub.time : null}
+              playbackMode={scene.backgroundVideoPlaybackMode ?? 'normal'}
+              speed={scene.backgroundVideoSpeed ?? 1}
+              continuous={project.backgroundVideoContinuous ?? false}
+              globalTime={currentTime}
+            />
+          ) : project.backgroundTexture ? (
+            <BackgroundTextureMesh
+              config={project.backgroundTexture}
+              viewAspect={project.aspectRatio[0] / project.aspectRatio[1]}
+              globalTime={currentTime}
+            />
+          ) : (
+            <mesh
+              position={[0, 0, -2]}
+              scale={[10 * (project.aspectRatio[0] / project.aspectRatio[1]), 10, 1]}
+            >
+              <planeGeometry args={[1, 1]} />
+              <meshBasicMaterial color="#1a1a1a" side={THREE.DoubleSide} />
+            </mesh>
+          )}
+        </ProfiledSection>
+      )}
       {(() => {
         const panes = getPanesForRender(project)
         if (panes.length > 0) {
-          return panes.map((pane) => {
-            const scrubTime =
-              trimScrub?.video === 'pane' && trimScrub.paneId === pane.id ? trimScrub.time : null
-            return (
-              <SinglePane
-                key={pane.id}
-                pane={pane}
-                scene={scene}
-                sceneLocalTime={sceneLocalTime}
-                sceneDuration={sceneDuration}
-                scrubTime={scrubTime}
-              />
-            )
-          })
+          return (
+            <ProfiledSection id="planes">
+              {panes.map((pane) => {
+                const scrubTime =
+                  trimScrub?.video === 'pane' && trimScrub.paneId === pane.id ? trimScrub.time : null
+                return (
+                  <SinglePane
+                    key={pane.id}
+                    pane={pane}
+                    scene={scene}
+                    sceneLocalTime={sceneLocalTime}
+                    sceneDuration={sceneDuration}
+                    scrubTime={scrubTime}
+                  />
+                )
+              })}
+            </ProfiledSection>
+          )
         }
         const planeMedia = getPlaneMedia(project)
         const extrusion = project.planeExtrusionDepth ?? 0
         if (!planeMedia) return null
         if (planeMedia.type === 'video') {
           return (
-            <PlaneVideo
-              url={planeMedia.url}
-              trim={scene.planeTrim}
-              sceneLocalTime={sceneLocalTime}
-              sceneDuration={sceneDuration}
-              scrubTime={trimScrub?.video === 'plane' ? trimScrub.time : null}
-              playbackMode={scene.planeVideoPlaybackMode ?? 'normal'}
-              speed={scene.planeVideoSpeed ?? 1}
-              extrusionDepth={extrusion}
-            />
+            <ProfiledSection id="planes">
+              <PlaneVideo
+                url={planeMedia.url}
+                trim={scene.planeTrim}
+                sceneLocalTime={sceneLocalTime}
+                sceneDuration={sceneDuration}
+                scrubTime={trimScrub?.video === 'plane' ? trimScrub.time : null}
+                playbackMode={scene.planeVideoPlaybackMode ?? 'normal'}
+                speed={scene.planeVideoSpeed ?? 1}
+                extrusionDepth={extrusion}
+              />
+            </ProfiledSection>
           )
         }
         if (planeMedia.type === 'image') {
-          return <PlaneImage url={planeMedia.url} extrusionDepth={extrusion} />
+          return (
+            <ProfiledSection id="planes">
+              <PlaneImage url={planeMedia.url} extrusionDepth={extrusion} />
+            </ProfiledSection>
+          )
         }
         return null
       })()}
       {(scene.texts ?? []).filter((t) => t.mode === '3d').map((t) => (
         <TextPlane3D key={t.id} text={t} />
       ))}
+      <ProfiledSection id="effects">
       <EffectComposer>
         {dofEnabled ? (
           <DepthOfField
@@ -1247,6 +1403,80 @@ function SceneContent() {
           focalLength={lensFocalLength}
           opacity={lensEnabled ? 1 : 0}
         />
+        {swirlEnabled ? (
+          <SwirlEffect
+            strength={swirlStrength}
+            radius={swirlRadius}
+            centerX={swirlCenterX}
+            centerY={swirlCenterY}
+            aspectRatio={ar}
+          />
+        ) : (<></>)}
+        {waveEnabled ? (
+          <WaveEffect
+            amplitudeX={waveAmpX}
+            amplitudeY={waveAmpY}
+            frequencyX={waveFreqX}
+            frequencyY={waveFreqY}
+            speed={waveSpeed}
+          />
+        ) : (<></>)}
+        {pinchEnabled ? (
+          <PinchEffect
+            strength={pinchStrength}
+            radius={pinchRadius}
+            centerX={pinchCenterX}
+            centerY={pinchCenterY}
+            aspectRatio={ar}
+          />
+        ) : (<></>)}
+        {kalEnabled ? (
+          <KaleidoscopeEffect
+            segments={kalSegments}
+            rotation={kalRotation}
+            aspectRatio={ar}
+          />
+        ) : (<></>)}
+        {meltEnabled ? (
+          <MeltEffect
+            strength={meltStrength}
+            frequency={meltFrequency}
+            speed={meltSpeed}
+          />
+        ) : (<></>)}
+        {radChrEnabled ? (
+          <RadialChromaticEffect
+            strength={radChrStrength}
+            exponent={radChrExponent}
+          />
+        ) : (<></>)}
+        {fisheyeEnabled ? (
+          <FisheyeEffect
+            strength={fisheyeStrength}
+            aspectRatio={ar}
+          />
+        ) : (<></>)}
+        {psEnabled ? (
+          <PixelShatterEffect
+            scale={psScale}
+            strength={psStrength}
+          />
+        ) : (<></>)}
+        {tunnelEnabled ? (
+          <TunnelEffect
+            strength={tunnelStrength}
+            centerX={tunnelCenterX}
+            centerY={tunnelCenterY}
+            aspectRatio={ar}
+          />
+        ) : (<></>)}
+        {noiseWarpEnabled ? (
+          <NoiseWarpEffect
+            strength={noiseWarpStrength}
+            scale={noiseWarpScale}
+            speed={noiseWarpSpeed}
+          />
+        ) : (<></>)}
         {useLibraryGlitch ? (
           <Glitch
             active={glitchEnabled}
@@ -1312,6 +1542,7 @@ function SceneContent() {
           opacity={scanlineEnabled ? 1 : 0}
         />
       </EffectComposer>
+      </ProfiledSection>
     </>
   )
 }
@@ -1335,6 +1566,7 @@ export function EditorCanvas() {
         key={useAlpha ? 'plane-only' : 'full'}
         gl={{ preserveDrawingBuffer: true, alpha: useAlpha }}
         camera={{ position: [0, 0, 2], fov: FOV_DEG }}
+        dpr={isExporting ? 1 : Math.min(window.devicePixelRatio, 2)}
         onCreated={({ camera }) => {
           camera.position.set(0, 0, 2)
         }}

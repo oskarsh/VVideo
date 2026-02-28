@@ -12,16 +12,21 @@ import { Timeline } from '@/components/Timeline'
 import { ChangelogModal, useChangelog } from '@/components/ChangelogModal'
 import { WelcomeModal, useWelcome } from '@/components/WelcomeModal'
 import { AboutModal } from '@/components/AboutModal'
+import { ProjectsDashboard } from '@/components/ProjectsDashboard'
+import { saveCurrentProject } from '@/lib/storage/projectStorage'
 import { TrimEditorSlot } from '@/components/TrimEditorSlot'
+import { PerformanceOverlay } from '@/components/PerformanceOverlay'
 import { ExportDialog } from '@/components/ExportDialog'
 import { ScreenshotDialog } from '@/components/ScreenshotDialog'
 import { VVideoLogo } from '@/components/VVideoLogo'
 import { PresetDropdown } from '@/components/PresetDropdown'
 import { StaticTextOverlay } from '@/components/StaticTextOverlay'
-import { getPlaneMedia } from '@/types'
+import { getPlaneMedia, getPanesForRender } from '@/types'
 import { getFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyoverKeyframes } from '@/lib/flyover'
 import { FRAME_BY_FRAME_RESOLUTION_THRESHOLD, type ExportFormat } from '@/constants/export'
+import { isWebCodecsSupported, WebCodecsRecorder } from '@/lib/exportWebCodecs'
+import { waitForVideoSeeked } from '@/lib/exportVideoSync'
 
 function isMediaDrag(e: React.DragEvent | DragEvent): boolean {
   if (!e.dataTransfer?.types.includes('Files')) return false
@@ -221,18 +226,26 @@ export default function App() {
   const changelog = useChangelog()
   const welcome = useWelcome()
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [dashboardOpen, setDashboardOpen] = useState(false)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
   const setBackgroundTrim = useStore((s) => s.setBackgroundTrim)
-  const setPlaneTrim = useStore((s) => s.setPlaneTrim)
-
-  const setProjectPlaneMedia = useStore((s) => s.setProjectPlaneMedia)
+  const addPaneWithMedia = useStore((s) => s.addPaneWithMedia)
   const project = useStore((s) => s.project)
 
   useEffect(() => {
     setContentRef(contentRef.current)
     return () => setContentRef(null)
   }, [setContentRef])
+
+  // Auto-save: debounce 800ms on every project change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const canvas = document.querySelector('[data-canvas-root] canvas') as HTMLCanvasElement | null
+      saveCurrentProject(project, canvas)
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [project])
 
   /** SCREENSHOT_PROTOTYPE: when ?screenshot=2.0.8, add keyframes so timeline shows keyframe lane */
   useEffect(() => {
@@ -266,12 +279,9 @@ export default function App() {
       setProjectBackgroundVideo(url)
       setBackgroundTrim(currentSceneIndex, null)
     } else {
-      const oldMedia = getPlaneMedia(project)
-      if (oldMedia?.url?.startsWith('blob:')) URL.revokeObjectURL(oldMedia.url)
       const url = URL.createObjectURL(file)
       const mediaType = getPlaneMediaType(file)
-      setProjectPlaneMedia(mediaType === 'video' ? { type: 'video', url } : { type: 'image', url })
-      if (mediaType === 'video') setPlaneTrim(currentSceneIndex, null)
+      addPaneWithMedia(mediaType === 'video' ? { type: 'video', url } : { type: 'image', url })
     }
     setShowDropOverlay(false)
   }
@@ -294,6 +304,8 @@ export default function App() {
         onClose={changelog.close}
       />
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <ProjectsDashboard open={dashboardOpen} onClose={() => setDashboardOpen(false)} />
+      <PerformanceOverlay />
       <TrimEditorSlot />
       <PlaybackLoop />
       <SpacebarPlayback />
@@ -301,6 +313,13 @@ export default function App() {
       <header className="flex items-center justify-between px-3 py-2 lg:px-4 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-3">
           <VVideoLogo className="h-6 text-white" />
+          <button
+            type="button"
+            onClick={() => setDashboardOpen(true)}
+            className="text-xs text-white/50 hover:text-white/80 transition-colors"
+          >
+            Projects
+          </button>
           <button
             type="button"
             onClick={changelog.open}
@@ -371,6 +390,7 @@ function FloatingTransportBar() {
   const flyoverEditCamera = useStore((s) => s.flyoverEditCamera)
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const addFlyoverKeyframe = useStore((s) => s.addFlyoverKeyframe)
+  const updateFlyoverKeyframe = useStore((s) => s.updateFlyoverKeyframe)
   const setSelectedCameraKeyframe = useStore((s) => s.setSelectedCameraKeyframe)
   const scene = project.scenes[currentSceneIndex]
   const sceneStarts = project.scenes.reduce<number[]>(
@@ -432,12 +452,22 @@ function FloatingTransportBar() {
   const handleSetKeyframe = () => {
     const cam = getFlyoverEditCamera()
     if (!cam) return
-    addFlyoverKeyframe(currentSceneIndex, {
-      time: Math.max(0, Math.min(1, normalizedTime)),
-      position: [...cam.position],
-      rotation: [...cam.rotation],
-      fov: cam.fov,
-    })
+    const clampedTime = Math.max(0, Math.min(1, normalizedTime))
+    const existingIdx = keyframes.findIndex((kf) => Math.abs(kf.time - clampedTime) < KEYFRAME_SNAP_EPS)
+    if (existingIdx >= 0) {
+      updateFlyoverKeyframe(currentSceneIndex, existingIdx, {
+        position: [...cam.position],
+        rotation: [...cam.rotation],
+        fov: cam.fov,
+      })
+    } else {
+      addFlyoverKeyframe(currentSceneIndex, {
+        time: clampedTime,
+        position: [...cam.position],
+        rotation: [...cam.rotation],
+        fov: cam.fov,
+      })
+    }
   }
 
   const [x, y, z] = flyoverEditCamera?.position ?? [0, 0, 2]
@@ -643,29 +673,122 @@ function ExportButton() {
     setExportHeight(resolution)
     setExporting(true)
     setExportDialogOpen(false)
-    const useFrameByFrame = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD || frameByFrame
+    const isPlaneOnly = content === 'plane-only'
+    let useFrameByFrame = resolution >= FRAME_BY_FRAME_RESOLUTION_THRESHOLD || frameByFrame
     setPlaying(true)
-    if (useFrameByFrame) setFrameByFrameExporting(true)
     try {
-      // Let canvas remount with alpha if plane-only
       await new Promise((r) => setTimeout(r, 100))
-      const canvas = document.querySelector('[data-canvas-root] canvas') as HTMLCanvasElement | null
-      if (!canvas) return
-      const stream = canvas.captureStream(framerate)
-      const useMp4 = format === 'mp4' && content !== 'plane-only' && MediaRecorder.isTypeSupported('video/mp4')
+      const canvasEl = document.querySelector('[data-canvas-root] canvas') as HTMLCanvasElement | null
+      if (!canvasEl) return
+
+      const suffix = isPlaneOnly ? '-panel' : ''
+      const baseName = project.name || 'export'
+
+      // Number of video elements that need to seek each frame (used for seek-wait).
+      const videoCount = (project.backgroundVideoUrl ? 1 : 0) +
+        getPanesForRender(project).filter((p) => p.media?.type === 'video').length
+
+      const rafCount = 2
+      const waitForRender = () =>
+        new Promise<void>((r) => {
+          let n = 0
+          const next = () => {
+            n++
+            if (n >= rafCount) r()
+            else requestAnimationFrame(next)
+          }
+          requestAnimationFrame(next)
+        })
+
+      const downloadBlob = (blob: Blob, name: string) => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = name
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+      }
+
+      // ── WebCodecs path ────────────────────────────────────────────────────────
+      // Uses VideoEncoder with explicit per-frame timestamps so output duration
+      // always matches content duration regardless of render/seek latency.
+      // waitForVideoSeeked() is re-enabled here to keep plane/bg video synced.
+      const useWebCodecs = useFrameByFrame && !isPlaneOnly && isWebCodecsSupported()
+
+      if (useWebCodecs) {
+        setFrameByFrameExporting(true)
+
+        // Per-frame advancement + seek-wait helper.
+        const advanceFrame = async (t: number) => {
+          const { promise: seekedPromise } = waitForVideoSeeked(videoCount)
+          flushSync(() => {
+            setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
+            setCurrentTime(t)
+          })
+          await waitForRender()
+          if (videoCount > 0) await seekedPromise
+        }
+
+        if (exportPerScene && project.scenes.length > 1) {
+          let sceneStartTime = 0
+          for (let s = 0; s < project.scenes.length; s++) {
+            const scene = project.scenes[s]
+            const wc = await WebCodecsRecorder.create(canvasEl.width, canvasEl.height, framerate, bitrate, format)
+            if (!wc) throw new Error('WebCodecs recorder unavailable for scene ' + s)
+            const segFrames = Math.ceil(scene.durationSeconds * framerate)
+            for (let i = 0; i < segFrames; i++) {
+              const t = sceneStartTime + Math.min(i / framerate, scene.durationSeconds)
+              await advanceFrame(t)
+              wc.captureFrame(canvasEl, i)
+            }
+            const blob = await wc.finish()
+            downloadBlob(blob, `${baseName}${suffix}-scene-${s + 1}${wc.fileExt}`)
+            sceneStartTime += scene.durationSeconds
+          }
+        } else {
+          const totalDuration = project.scenes.reduce((acc, s) => acc + s.durationSeconds, 0)
+          const wc = await WebCodecsRecorder.create(canvasEl.width, canvasEl.height, framerate, bitrate, format)
+          if (!wc) throw new Error('WebCodecs recorder unavailable')
+          const totalFrames = Math.ceil(totalDuration * framerate)
+          for (let i = 0; i < totalFrames; i++) {
+            const t = Math.min(i / framerate, totalDuration)
+            await advanceFrame(t)
+            wc.captureFrame(canvasEl, i)
+          }
+          const blob = await wc.finish()
+          downloadBlob(blob, `${baseName}${suffix}${wc.fileExt}`)
+        }
+        return
+      }
+
+      // ── MediaRecorder fallback ────────────────────────────────────────────────
+      // Used for plane-only (alpha) exports and browsers without VideoEncoder.
+      // No seek-wait: output duration is driven by wall-clock delivery timing.
+      if (useFrameByFrame) {
+        const testStream = canvasEl.captureStream(0)
+        const testTrack = testStream.getVideoTracks()[0] as { requestFrame?: () => void } | undefined
+        if (typeof testTrack?.requestFrame !== 'function') useFrameByFrame = false
+        testStream.getTracks().forEach((t) => t.stop())
+      }
+      if (useFrameByFrame) setFrameByFrameExporting(true)
+
+      const stream = canvasEl.captureStream(useFrameByFrame ? 0 : framerate)
+      const captureTrack = useFrameByFrame
+        ? (stream.getVideoTracks()[0] as { requestFrame?: () => void })
+        : undefined
+      const useMp4 = format === 'mp4' && !isPlaneOnly && MediaRecorder.isTypeSupported('video/mp4')
       const mime = useMp4
         ? 'video/mp4'
         : MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
           ? 'video/webm;codecs=vp9'
           : 'video/webm'
       const ext = useMp4 ? '.mp4' : '.webm'
-      const suffix = content === 'plane-only' ? '-panel' : ''
-      const baseName = project.name || 'export'
+      const frameDurationMs = 1000 / framerate
 
       const recordSegment = async (
         startTime: number,
         durationSeconds: number,
-        downloadName: string
+        downloadName: string,
+        track: { requestFrame?: () => void } | undefined
       ): Promise<void> => {
         setCurrentSceneIndex(sceneIndexAtTime(project.scenes, startTime))
         setCurrentTime(startTime)
@@ -679,7 +802,6 @@ function ExportButton() {
         recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
         recorder.start(100)
         if (useFrameByFrame) {
-          const frameDurationMs = 1000 / framerate
           const segmentFrames = Math.ceil(durationSeconds * framerate)
           for (let i = 0; i < segmentFrames; i++) {
             const frameStart = performance.now()
@@ -688,7 +810,8 @@ function ExportButton() {
               setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
               setCurrentTime(t)
             })
-            await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+            await waitForRender()
+            track?.requestFrame?.()
             const elapsed = performance.now() - frameStart
             const wait = Math.max(0, frameDurationMs - elapsed)
             if (wait > 0) await new Promise((r) => setTimeout(r, wait))
@@ -699,12 +822,7 @@ function ExportButton() {
         recorder.stop()
         await new Promise<void>((resolve) => {
           recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: mime })
-            const a = document.createElement('a')
-            a.href = URL.createObjectURL(blob)
-            a.download = downloadName
-            a.click()
-            setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+            downloadBlob(new Blob(chunks, { type: mime }), downloadName)
             resolve()
           }
         })
@@ -717,7 +835,8 @@ function ExportButton() {
           await recordSegment(
             sceneStartTime,
             scene.durationSeconds,
-            `${baseName}${suffix}-scene-${i + 1}${ext}`
+            `${baseName}${suffix}-scene-${i + 1}${ext}`,
+            captureTrack
           )
           sceneStartTime += scene.durationSeconds
         }
@@ -732,17 +851,8 @@ function ExportButton() {
         })
         const chunks: Blob[] = []
         recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
-        recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: mime })
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(blob)
-          a.download = `${baseName}${suffix}${ext}`
-          a.click()
-          setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-        }
         recorder.start(100)
         if (useFrameByFrame) {
-          const frameDurationMs = 1000 / framerate
           const totalFrames = Math.ceil(totalDuration * framerate)
           for (let i = 0; i < totalFrames; i++) {
             const frameStart = performance.now()
@@ -751,7 +861,8 @@ function ExportButton() {
               setCurrentSceneIndex(sceneIndexAtTime(project.scenes, t))
               setCurrentTime(t)
             })
-            await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+            await waitForRender()
+            captureTrack?.requestFrame?.()
             const elapsed = performance.now() - frameStart
             const wait = Math.max(0, frameDurationMs - elapsed)
             if (wait > 0) await new Promise((r) => setTimeout(r, wait))
@@ -760,6 +871,12 @@ function ExportButton() {
           await new Promise((r) => setTimeout(r, totalDuration * 1000 + 500))
         }
         recorder.stop()
+        await new Promise<void>((resolve) => {
+          recorder.onstop = () => {
+            downloadBlob(new Blob(chunks, { type: mime }), `${baseName}${suffix}${ext}`)
+            resolve()
+          }
+        })
       }
     } finally {
       setExporting(false)

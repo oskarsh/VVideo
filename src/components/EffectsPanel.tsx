@@ -15,6 +15,16 @@ import type {
   SceneEffectGlitch,
   SceneEffectVignette,
   SceneEffectScanline,
+  SceneEffectSwirl,
+  SceneEffectWave,
+  SceneEffectPinch,
+  SceneEffectKaleidoscope,
+  SceneEffectMelt,
+  SceneEffectRadialChromatic,
+  SceneEffectFisheye,
+  SceneEffectPixelShatter,
+  SceneEffectTunnel,
+  SceneEffectNoiseWarp,
   SceneEffect,
   GlitchAlgorithm,
   ChromaticDirection,
@@ -299,6 +309,66 @@ function renderEffectContent(
           setEffect={setEffect}
           sidebarMode={sidebarMode}
         />
+      </div>
+    )
+  if (eff.type === 'swirl')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <SwirlControls eff={eff as SceneEffectSwirl} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'wave')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <WaveControls eff={eff as SceneEffectWave} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'pinch')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <PinchControls eff={eff as SceneEffectPinch} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'kaleidoscope')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <KaleidoscopeControls eff={eff as SceneEffectKaleidoscope} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'melt')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <MeltControls eff={eff as SceneEffectMelt} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'radialChromatic')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <RadialChromaticControls eff={eff as SceneEffectRadialChromatic} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'fisheye')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <FisheyeControls eff={eff as SceneEffectFisheye} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'pixelShatter')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <PixelShatterControls eff={eff as SceneEffectPixelShatter} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'tunnel')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <TunnelControls eff={eff as SceneEffectTunnel} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'noiseWarp')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <NoiseWarpControls eff={eff as SceneEffectNoiseWarp} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
       </div>
     )
   return null
@@ -1064,3 +1134,167 @@ function ScanlineControls({
   )
 }
 
+
+type EffectControlProps<T> = {
+  eff: T
+  sceneIndex: number
+  effectIndex: number
+  setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
+}
+
+function SwirlControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectSwirl>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Strength" start={eff.strengthStart} end={eff.strengthEnd} min={-6} max={6} step={0.1} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { strengthStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { strengthEnd: v })} />
+      <KeyframeSlider label="Radius" start={eff.radiusStart} end={eff.radiusEnd} min={0.05} max={2} step={0.05} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { radiusStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { radiusEnd: v })} />
+      <KeyframeSlider label="Center X" start={eff.centerXStart} end={eff.centerXEnd} min={0} max={1} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { centerXStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { centerXEnd: v })} />
+      <KeyframeSlider label="Center Y" start={eff.centerYStart} end={eff.centerYEnd} min={0} max={1} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { centerYStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { centerYEnd: v })} />
+    </div>
+  )
+}
+
+function WaveControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectWave>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Amplitude X" start={eff.amplitudeXStart} end={eff.amplitudeXEnd} min={0} max={0.15} step={0.005} format={(v) => v.toFixed(3)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { amplitudeXStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { amplitudeXEnd: v })} />
+      <KeyframeSlider label="Amplitude Y" start={eff.amplitudeYStart} end={eff.amplitudeYEnd} min={0} max={0.15} step={0.005} format={(v) => v.toFixed(3)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { amplitudeYStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { amplitudeYEnd: v })} />
+      <KeyframeSlider label="Frequency X" start={eff.frequencyXStart} end={eff.frequencyXEnd} min={1} max={30} step={0.5} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { frequencyXStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { frequencyXEnd: v })} />
+      <KeyframeSlider label="Frequency Y" start={eff.frequencyYStart} end={eff.frequencyYEnd} min={1} max={30} step={0.5} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { frequencyYStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { frequencyYEnd: v })} />
+      <KeyframeSlider label="Speed" start={eff.speedStart} end={eff.speedEnd} min={0} max={5} step={0.1} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { speedStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { speedEnd: v })} />
+    </div>
+  )
+}
+
+function PinchControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectPinch>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Strength (neg=pinch, pos=bulge)" start={eff.strengthStart} end={eff.strengthEnd} min={-2} max={2} step={0.05} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { strengthStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { strengthEnd: v })} />
+      <KeyframeSlider label="Radius" start={eff.radiusStart} end={eff.radiusEnd} min={0.05} max={1} step={0.05} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { radiusStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { radiusEnd: v })} />
+      <KeyframeSlider label="Center X" start={eff.centerXStart} end={eff.centerXEnd} min={0} max={1} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { centerXStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { centerXEnd: v })} />
+      <KeyframeSlider label="Center Y" start={eff.centerYStart} end={eff.centerYEnd} min={0} max={1} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { centerYStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { centerYEnd: v })} />
+    </div>
+  )
+}
+
+function KaleidoscopeControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectKaleidoscope>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Segments" start={eff.segmentsStart} end={eff.segmentsEnd} min={2} max={12} step={1} format={(v) => String(Math.round(v))}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { segmentsStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { segmentsEnd: v })} />
+      <KeyframeSlider label="Rotation" start={eff.rotationStart} end={eff.rotationEnd} min={0} max={6.28} step={0.05} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { rotationStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { rotationEnd: v })} />
+    </div>
+  )
+}
+
+function MeltControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectMelt>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Strength" start={eff.strengthStart} end={eff.strengthEnd} min={0} max={0.5} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { strengthStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { strengthEnd: v })} />
+      <KeyframeSlider label="Frequency" start={eff.frequencyStart} end={eff.frequencyEnd} min={1} max={20} step={0.5} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { frequencyStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { frequencyEnd: v })} />
+      <KeyframeSlider label="Speed" start={eff.speedStart} end={eff.speedEnd} min={0} max={5} step={0.1} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { speedStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { speedEnd: v })} />
+    </div>
+  )
+}
+
+function RadialChromaticControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectRadialChromatic>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Strength" start={eff.strengthStart} end={eff.strengthEnd} min={0} max={0.25} step={0.005} format={(v) => v.toFixed(3)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { strengthStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { strengthEnd: v })} />
+      <KeyframeSlider label="Exponent (radial power)" start={eff.exponentStart} end={eff.exponentEnd} min={0.5} max={4} step={0.1} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { exponentStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { exponentEnd: v })} />
+    </div>
+  )
+}
+
+function FisheyeControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectFisheye>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Strength" start={eff.strengthStart} end={eff.strengthEnd} min={0.5} max={15} step={0.1} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { strengthStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { strengthEnd: v })} />
+    </div>
+  )
+}
+
+function PixelShatterControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectPixelShatter>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Scale (cell count)" start={eff.scaleStart} end={eff.scaleEnd} min={5} max={50} step={1} format={(v) => String(Math.round(v))}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { scaleStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { scaleEnd: v })} />
+      <KeyframeSlider label="Strength" start={eff.strengthStart} end={eff.strengthEnd} min={0} max={0.2} step={0.005} format={(v) => v.toFixed(3)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { strengthStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { strengthEnd: v })} />
+    </div>
+  )
+}
+
+function TunnelControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectTunnel>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Strength (pos=zoom-in, neg=zoom-out)" start={eff.strengthStart} end={eff.strengthEnd} min={-1} max={1} step={0.02} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { strengthStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { strengthEnd: v })} />
+      <KeyframeSlider label="Center X" start={eff.centerXStart} end={eff.centerXEnd} min={0} max={1} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { centerXStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { centerXEnd: v })} />
+      <KeyframeSlider label="Center Y" start={eff.centerYStart} end={eff.centerYEnd} min={0} max={1} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { centerYStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { centerYEnd: v })} />
+    </div>
+  )
+}
+
+function NoiseWarpControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectNoiseWarp>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Strength" start={eff.strengthStart} end={eff.strengthEnd} min={0} max={0.15} step={0.005} format={(v) => v.toFixed(3)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { strengthStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { strengthEnd: v })} />
+      <KeyframeSlider label="Scale (noise frequency)" start={eff.scaleStart} end={eff.scaleEnd} min={1} max={20} step={0.5} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { scaleStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { scaleEnd: v })} />
+      <KeyframeSlider label="Speed" start={eff.speedStart} end={eff.speedEnd} min={0} max={5} step={0.1} format={(v) => v.toFixed(1)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { speedStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { speedEnd: v })} />
+    </div>
+  )
+}

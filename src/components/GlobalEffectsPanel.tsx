@@ -3,10 +3,9 @@ import { useStore } from '@/store'
 import { CollapsibleSection } from './CollapsibleSection'
 import {
   getGlobalEffectStateAtTime,
-  createKeyframeAtTime,
   DEFAULT_GLOBAL_KEYFRAMES,
 } from '@/lib/globalEffects'
-import type { Scene, GlobalEffectType, Project } from '@/types'
+import type { Scene, GlobalEffectType, Project, GlobalEffectKeyframe } from '@/types'
 import { getFlyoverStateAt } from '@/lib/flyover'
 import { GLOBAL_EFFECT_LABELS } from '@/lib/effectLabels'
 import { inputClass } from '@/constants/ui'
@@ -23,6 +22,19 @@ export const GLOBAL_EFFECT_TYPES: GlobalEffectType[] = [
   'glitch',
   'vignette',
   'scanline',
+]
+
+export const CAMERA_DISTORTION_TYPES: GlobalEffectType[] = [
+  'swirl',
+  'wave',
+  'pinch',
+  'kaleidoscope',
+  'melt',
+  'radialChromatic',
+  'fisheye',
+  'pixelShatter',
+  'tunnel',
+  'noiseWarp',
 ]
 
 /** Build effect state at time from scene (for "add keyframe" when no global track yet). */
@@ -133,6 +145,46 @@ export function getSceneEffectStateAtTime(
         scrollSpeed: s.scrollSpeed ?? 0,
       }
     }
+    case 'swirl': {
+      const s = eff as { enabled?: boolean; strengthStart?: number; strengthEnd?: number; radiusStart?: number; radiusEnd?: number; centerXStart?: number; centerXEnd?: number; centerYStart?: number; centerYEnd?: number }
+      return { type: 'swirl', enabled: s.enabled, strengthStart: lerp(s.strengthStart ?? 2, s.strengthEnd ?? 2), strengthEnd: lerp(s.strengthStart ?? 2, s.strengthEnd ?? 2), radiusStart: lerp(s.radiusStart ?? 0.5, s.radiusEnd ?? 0.5), radiusEnd: lerp(s.radiusStart ?? 0.5, s.radiusEnd ?? 0.5), centerXStart: lerp(s.centerXStart ?? 0.5, s.centerXEnd ?? 0.5), centerXEnd: lerp(s.centerXStart ?? 0.5, s.centerXEnd ?? 0.5), centerYStart: lerp(s.centerYStart ?? 0.5, s.centerYEnd ?? 0.5), centerYEnd: lerp(s.centerYStart ?? 0.5, s.centerYEnd ?? 0.5) }
+    }
+    case 'wave': {
+      const w = eff as { enabled?: boolean; amplitudeXStart?: number; amplitudeXEnd?: number; amplitudeYStart?: number; amplitudeYEnd?: number; frequencyXStart?: number; frequencyXEnd?: number; frequencyYStart?: number; frequencyYEnd?: number; speedStart?: number; speedEnd?: number }
+      return { type: 'wave', enabled: w.enabled, amplitudeXStart: lerp(w.amplitudeXStart ?? 0.02, w.amplitudeXEnd ?? 0.02), amplitudeXEnd: lerp(w.amplitudeXStart ?? 0.02, w.amplitudeXEnd ?? 0.02), amplitudeYStart: lerp(w.amplitudeYStart ?? 0.02, w.amplitudeYEnd ?? 0.02), amplitudeYEnd: lerp(w.amplitudeYStart ?? 0.02, w.amplitudeYEnd ?? 0.02), frequencyXStart: lerp(w.frequencyXStart ?? 5, w.frequencyXEnd ?? 5), frequencyXEnd: lerp(w.frequencyXStart ?? 5, w.frequencyXEnd ?? 5), frequencyYStart: lerp(w.frequencyYStart ?? 5, w.frequencyYEnd ?? 5), frequencyYEnd: lerp(w.frequencyYStart ?? 5, w.frequencyYEnd ?? 5), speedStart: lerp(w.speedStart ?? 1, w.speedEnd ?? 1), speedEnd: lerp(w.speedStart ?? 1, w.speedEnd ?? 1) }
+    }
+    case 'pinch': {
+      const p = eff as { enabled?: boolean; strengthStart?: number; strengthEnd?: number; radiusStart?: number; radiusEnd?: number; centerXStart?: number; centerXEnd?: number; centerYStart?: number; centerYEnd?: number }
+      return { type: 'pinch', enabled: p.enabled, strengthStart: lerp(p.strengthStart ?? 0.5, p.strengthEnd ?? 0.5), strengthEnd: lerp(p.strengthStart ?? 0.5, p.strengthEnd ?? 0.5), radiusStart: lerp(p.radiusStart ?? 0.5, p.radiusEnd ?? 0.5), radiusEnd: lerp(p.radiusStart ?? 0.5, p.radiusEnd ?? 0.5), centerXStart: lerp(p.centerXStart ?? 0.5, p.centerXEnd ?? 0.5), centerXEnd: lerp(p.centerXStart ?? 0.5, p.centerXEnd ?? 0.5), centerYStart: lerp(p.centerYStart ?? 0.5, p.centerYEnd ?? 0.5), centerYEnd: lerp(p.centerYStart ?? 0.5, p.centerYEnd ?? 0.5) }
+    }
+    case 'kaleidoscope': {
+      const k = eff as { enabled?: boolean; segmentsStart?: number; segmentsEnd?: number; rotationStart?: number; rotationEnd?: number }
+      return { type: 'kaleidoscope', enabled: k.enabled, segmentsStart: lerp(k.segmentsStart ?? 6, k.segmentsEnd ?? 6), segmentsEnd: lerp(k.segmentsStart ?? 6, k.segmentsEnd ?? 6), rotationStart: lerp(k.rotationStart ?? 0, k.rotationEnd ?? 0), rotationEnd: lerp(k.rotationStart ?? 0, k.rotationEnd ?? 0) }
+    }
+    case 'melt': {
+      const m = eff as { enabled?: boolean; strengthStart?: number; strengthEnd?: number; frequencyStart?: number; frequencyEnd?: number; speedStart?: number; speedEnd?: number }
+      return { type: 'melt', enabled: m.enabled, strengthStart: lerp(m.strengthStart ?? 0.1, m.strengthEnd ?? 0.1), strengthEnd: lerp(m.strengthStart ?? 0.1, m.strengthEnd ?? 0.1), frequencyStart: lerp(m.frequencyStart ?? 5, m.frequencyEnd ?? 5), frequencyEnd: lerp(m.frequencyStart ?? 5, m.frequencyEnd ?? 5), speedStart: lerp(m.speedStart ?? 1, m.speedEnd ?? 1), speedEnd: lerp(m.speedStart ?? 1, m.speedEnd ?? 1) }
+    }
+    case 'radialChromatic': {
+      const r = eff as { enabled?: boolean; strengthStart?: number; strengthEnd?: number; exponentStart?: number; exponentEnd?: number }
+      return { type: 'radialChromatic', enabled: r.enabled, strengthStart: lerp(r.strengthStart ?? 0.05, r.strengthEnd ?? 0.05), strengthEnd: lerp(r.strengthStart ?? 0.05, r.strengthEnd ?? 0.05), exponentStart: lerp(r.exponentStart ?? 2, r.exponentEnd ?? 2), exponentEnd: lerp(r.exponentStart ?? 2, r.exponentEnd ?? 2) }
+    }
+    case 'fisheye': {
+      const f = eff as { enabled?: boolean; strengthStart?: number; strengthEnd?: number }
+      return { type: 'fisheye', enabled: f.enabled, strengthStart: lerp(f.strengthStart ?? 3, f.strengthEnd ?? 3), strengthEnd: lerp(f.strengthStart ?? 3, f.strengthEnd ?? 3) }
+    }
+    case 'pixelShatter': {
+      const p = eff as { enabled?: boolean; scaleStart?: number; scaleEnd?: number; strengthStart?: number; strengthEnd?: number }
+      return { type: 'pixelShatter', enabled: p.enabled, scaleStart: lerp(p.scaleStart ?? 20, p.scaleEnd ?? 20), scaleEnd: lerp(p.scaleStart ?? 20, p.scaleEnd ?? 20), strengthStart: lerp(p.strengthStart ?? 0.05, p.strengthEnd ?? 0.05), strengthEnd: lerp(p.strengthStart ?? 0.05, p.strengthEnd ?? 0.05) }
+    }
+    case 'tunnel': {
+      const t = eff as { enabled?: boolean; strengthStart?: number; strengthEnd?: number; centerXStart?: number; centerXEnd?: number; centerYStart?: number; centerYEnd?: number }
+      return { type: 'tunnel', enabled: t.enabled, strengthStart: lerp(t.strengthStart ?? 0.3, t.strengthEnd ?? 0.3), strengthEnd: lerp(t.strengthStart ?? 0.3, t.strengthEnd ?? 0.3), centerXStart: lerp(t.centerXStart ?? 0.5, t.centerXEnd ?? 0.5), centerXEnd: lerp(t.centerXStart ?? 0.5, t.centerXEnd ?? 0.5), centerYStart: lerp(t.centerYStart ?? 0.5, t.centerYEnd ?? 0.5), centerYEnd: lerp(t.centerYStart ?? 0.5, t.centerYEnd ?? 0.5) }
+    }
+    case 'noiseWarp': {
+      const n = eff as { enabled?: boolean; strengthStart?: number; strengthEnd?: number; scaleStart?: number; scaleEnd?: number; speedStart?: number; speedEnd?: number }
+      return { type: 'noiseWarp', enabled: n.enabled, strengthStart: lerp(n.strengthStart ?? 0.05, n.strengthEnd ?? 0.05), strengthEnd: lerp(n.strengthStart ?? 0.05, n.strengthEnd ?? 0.05), scaleStart: lerp(n.scaleStart ?? 5, n.scaleEnd ?? 5), scaleEnd: lerp(n.scaleStart ?? 5, n.scaleEnd ?? 5), speedStart: lerp(n.speedStart ?? 1, n.speedEnd ?? 1), speedEnd: lerp(n.speedStart ?? 1, n.speedEnd ?? 1) }
+    }
     default:
       return null
   }
@@ -196,16 +248,36 @@ function getDefaultEffectState(effectType: GlobalEffectType): Record<string, unk
       return { offset: kf.offset, darkness: kf.darkness }
     case 'scanline':
       return { density: kf.density, scrollSpeed: kf.scrollSpeed }
+    case 'swirl':
+      return { strengthStart: kf.strength, strengthEnd: kf.strength, radiusStart: kf.radius, radiusEnd: kf.radius, centerXStart: kf.centerX, centerXEnd: kf.centerX, centerYStart: kf.centerY, centerYEnd: kf.centerY }
+    case 'wave':
+      return { amplitudeXStart: kf.amplitudeX, amplitudeXEnd: kf.amplitudeX, amplitudeYStart: kf.amplitudeY, amplitudeYEnd: kf.amplitudeY, frequencyXStart: kf.frequencyX, frequencyXEnd: kf.frequencyX, frequencyYStart: kf.frequencyY, frequencyYEnd: kf.frequencyY, speedStart: kf.speed, speedEnd: kf.speed }
+    case 'pinch':
+      return { strengthStart: kf.strength, strengthEnd: kf.strength, radiusStart: kf.radius, radiusEnd: kf.radius, centerXStart: kf.centerX, centerXEnd: kf.centerX, centerYStart: kf.centerY, centerYEnd: kf.centerY }
+    case 'kaleidoscope':
+      return { segmentsStart: kf.segments, segmentsEnd: kf.segments, rotationStart: kf.rotation, rotationEnd: kf.rotation }
+    case 'melt':
+      return { strengthStart: kf.strength, strengthEnd: kf.strength, frequencyStart: kf.frequency, frequencyEnd: kf.frequency, speedStart: kf.speed, speedEnd: kf.speed }
+    case 'radialChromatic':
+      return { strengthStart: kf.strength, strengthEnd: kf.strength, exponentStart: kf.exponent, exponentEnd: kf.exponent }
+    case 'fisheye':
+      return { strengthStart: kf.strength, strengthEnd: kf.strength }
+    case 'pixelShatter':
+      return { scaleStart: kf.scale, scaleEnd: kf.scale, strengthStart: kf.strength, strengthEnd: kf.strength }
+    case 'tunnel':
+      return { strengthStart: kf.strength, strengthEnd: kf.strength, centerXStart: kf.centerX, centerXEnd: kf.centerX, centerYStart: kf.centerY, centerYEnd: kf.centerY }
+    case 'noiseWarp':
+      return { strengthStart: kf.strength, strengthEnd: kf.strength, scaleStart: kf.scale, scaleEnd: kf.scale, speedStart: kf.speed, speedEnd: kf.speed }
     default:
       return { ...kf }
   }
 }
 
 /** Single slider with a keyframe dot button on the right.
- *  - `onChange`          — slider drag; never creates a keyframe
- *  - `onKeyframe`        — button click when NOT on a keyframe; commits a keyframe
- *  - `onRemoveKeyframe`  — button click when ON a keyframe; removes it
- *  - `isOnKeyframe`      — dot is filled when true, outlined when false
+ *  - `onChange`         — slider drag; never creates a keyframe
+ *  - `onKeyframe`       — button click when NOT on a keyframe for this param; commits a keyframe
+ *  - `onRemoveKeyframe` — button click when ON a keyframe for this param; removes it
+ *  - Pass `trackKeyframes` + `currentTime` so the dot state is per-param, not per-effect.
  */
 function SliderWithKeyframe({
   label,
@@ -218,7 +290,8 @@ function SliderWithKeyframe({
   onChange,
   onKeyframe,
   onRemoveKeyframe,
-  isOnKeyframe = false,
+  trackKeyframes,
+  currentTime,
 }: {
   label: string
   paramKey: string
@@ -230,8 +303,15 @@ function SliderWithKeyframe({
   onChange: (v: number) => void
   onKeyframe: (patch: Record<string, number>) => void
   onRemoveKeyframe?: () => void
-  isOnKeyframe?: boolean
+  trackKeyframes?: GlobalEffectKeyframe[]
+  currentTime?: number
 }) {
+  const SNAP_EPS = 0.05
+  const isOnKeyframe = Boolean(
+    trackKeyframes && trackKeyframes.some(
+      (kf) => Math.abs(kf.time - (currentTime ?? 0)) < SNAP_EPS && paramKey in (kf as unknown as Record<string, unknown>)
+    )
+  )
   const handleButtonClick = () => {
     if (isOnKeyframe && onRemoveKeyframe) {
       onRemoveKeyframe()
@@ -318,13 +398,8 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
         const draft = !track ? (drafts[effectType] ?? {}) : {}
         const displayState: Record<string, unknown> = track ? state : { ...state, ...draft }
 
-        // Whether the playhead sits on an existing keyframe for this effect (±50 ms snap).
-        const SNAP_EPS = 0.05
-        const isOnKeyframe = Boolean(
-          hasTrack && track!.keyframes.some((kf) => Math.abs(kf.time - currentTime) < SNAP_EPS)
-        )
-
         // Remove the keyframe closest to the current playhead position.
+        const SNAP_EPS = 0.05
         const removeKeyframeAtCurrentTime = () => {
           if (!hasTrack) return
           const idx = track!.keyframes.findIndex((kf) => Math.abs(kf.time - currentTime) < SNAP_EPS)
@@ -336,7 +411,7 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
         //   kfPatch    — keys for the global keyframe store (simple paramKey names); defaults to draftPatch
         //   - has keyframe track → write kfPatch to keyframe at playhead
         //   - track exists, no keyframes → write kfPatch to track.params (canvas updates immediately, no keyframe created)
-        //   - no track → write draftPatch to local draft only
+        //   - no track → create track with params so effect works immediately (no keyframe required)
         const onSliderChange = (
           draftPatch: Record<string, unknown>,
           kfPatch: Record<string, unknown> = draftPatch
@@ -346,10 +421,13 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
           } else if (track) {
             setGlobalEffectParams(effectType, { ...(track.params ?? {}), ...kfPatch })
           } else {
-            setDrafts((prev) => ({
-              ...prev,
-              [effectType]: { ...(prev[effectType] ?? {}), ...draftPatch },
-            }))
+            const fullParams = { ...state, ...(drafts[effectType] ?? {}), ...draftPatch }
+            setGlobalEffectTrack(effectType, { enabled: true, keyframes: [], params: fullParams })
+            setDrafts((prev) => {
+              const next = { ...prev }
+              delete next[effectType]
+              return next
+            })
           }
         }
 
@@ -360,21 +438,8 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
           } else if (track) {
             setGlobalEffectParams(effectType, { ...(track.params ?? {}), ...patch })
           } else {
-            setDrafts((prev) => ({
-              ...prev,
-              [effectType]: { ...(prev[effectType] ?? {}), ...patch },
-            }))
-          }
-        }
-
-        // Keyframe button click (when NOT on a keyframe): always commits.
-        // Merges state + draft + the button's param value, then clears the draft.
-        const onKf = (patch: Record<string, unknown>) => {
-          if (hasTrack) {
-            setGlobalEffectKeyframeAtTime(effectType, currentTime, patch as Partial<import('@/types').GlobalEffectKeyframe>)
-          } else {
-            const kf = createKeyframeAtTime(effectType, currentTime, { ...state, ...draft, ...patch })
-            setGlobalEffectTrack(effectType, { enabled: true, keyframes: [kf] })
+            const fullParams = { ...state, ...(drafts[effectType] ?? {}), ...patch }
+            setGlobalEffectTrack(effectType, { enabled: true, keyframes: [], params: fullParams })
             setDrafts((prev) => {
               const next = { ...prev }
               delete next[effectType]
@@ -383,12 +448,24 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
           }
         }
 
+        // Keyframe button click: only stores the one param that was clicked.
+        // setGlobalEffectKeyframeAtTime merges into an existing keyframe or creates a sparse one.
+        const onKf = (patch: Record<string, unknown>) => {
+          setGlobalEffectKeyframeAtTime(effectType, currentTime, patch as Partial<GlobalEffectKeyframe>)
+          setDrafts((prev) => {
+            const next = { ...prev }
+            delete next[effectType]
+            return next
+          })
+        }
+
         const inner = (
           <div className="rounded bg-white/5 p-2 space-y-2">
             {/* Sliders always visible — reflect current state at playhead (keyframes, project.dither, or scene). */}
             {(() => {
               // Shared props for every SliderWithKeyframe in this effect section.
-              const kfProps = { isOnKeyframe, onRemoveKeyframe: removeKeyframeAtCurrentTime }
+              // isOnKeyframe is computed per-param inside SliderWithKeyframe using trackKeyframes + paramKey.
+              const kfProps = { trackKeyframes: track?.keyframes, currentTime, onRemoveKeyframe: removeKeyframeAtCurrentTime }
 
               if (effectType === 'camera') {
                 const fov = (displayState.fov ?? 50) as number
@@ -536,6 +613,105 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                   </div>
                 )
               }
+              if (effectType === 'swirl') {
+                const s = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Strength" paramKey="strength" value={(s.strengthStart ?? 2) as number} min={-6} max={6} step={0.1} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ strengthStart: v, strengthEnd: v }, { strength: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Radius" paramKey="radius" value={(s.radiusStart ?? 0.5) as number} min={0.05} max={2} step={0.05} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ radiusStart: v, radiusEnd: v }, { radius: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Center X" paramKey="centerX" value={(s.centerXStart ?? 0.5) as number} min={0} max={1} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ centerXStart: v, centerXEnd: v }, { centerX: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Center Y" paramKey="centerY" value={(s.centerYStart ?? 0.5) as number} min={0} max={1} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ centerYStart: v, centerYEnd: v }, { centerY: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'wave') {
+                const w = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Amplitude X" paramKey="amplitudeX" value={(w.amplitudeXStart ?? 0.02) as number} min={0} max={0.15} step={0.005} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ amplitudeXStart: v, amplitudeXEnd: v }, { amplitudeX: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Amplitude Y" paramKey="amplitudeY" value={(w.amplitudeYStart ?? 0.02) as number} min={0} max={0.15} step={0.005} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ amplitudeYStart: v, amplitudeYEnd: v }, { amplitudeY: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Frequency X" paramKey="frequencyX" value={(w.frequencyXStart ?? 5) as number} min={1} max={30} step={0.5} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ frequencyXStart: v, frequencyXEnd: v }, { frequencyX: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Frequency Y" paramKey="frequencyY" value={(w.frequencyYStart ?? 5) as number} min={1} max={30} step={0.5} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ frequencyYStart: v, frequencyYEnd: v }, { frequencyY: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Speed" paramKey="speed" value={(w.speedStart ?? 1) as number} min={0} max={5} step={0.1} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ speedStart: v, speedEnd: v }, { speed: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'pinch') {
+                const p = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Strength (neg=pinch, pos=bulge)" paramKey="strength" value={(p.strengthStart ?? 0.5) as number} min={-2} max={2} step={0.05} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ strengthStart: v, strengthEnd: v }, { strength: v })} onKeyframe={(p2) => onKf(p2)} {...kfProps} />
+                    <SliderWithKeyframe label="Radius" paramKey="radius" value={(p.radiusStart ?? 0.5) as number} min={0.05} max={1} step={0.05} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ radiusStart: v, radiusEnd: v }, { radius: v })} onKeyframe={(p2) => onKf(p2)} {...kfProps} />
+                    <SliderWithKeyframe label="Center X" paramKey="centerX" value={(p.centerXStart ?? 0.5) as number} min={0} max={1} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ centerXStart: v, centerXEnd: v }, { centerX: v })} onKeyframe={(p2) => onKf(p2)} {...kfProps} />
+                    <SliderWithKeyframe label="Center Y" paramKey="centerY" value={(p.centerYStart ?? 0.5) as number} min={0} max={1} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ centerYStart: v, centerYEnd: v }, { centerY: v })} onKeyframe={(p2) => onKf(p2)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'kaleidoscope') {
+                const k = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Segments" paramKey="segments" value={(k.segmentsStart ?? 6) as number} min={2} max={12} step={1} format={(x) => String(Math.round(x))} onChange={(v) => onSliderChange({ segmentsStart: v, segmentsEnd: v }, { segments: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Rotation" paramKey="rotation" value={(k.rotationStart ?? 0) as number} min={0} max={6.28} step={0.05} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ rotationStart: v, rotationEnd: v }, { rotation: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'melt') {
+                const m = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Strength" paramKey="strength" value={(m.strengthStart ?? 0.1) as number} min={0} max={0.5} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ strengthStart: v, strengthEnd: v }, { strength: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Frequency" paramKey="frequency" value={(m.frequencyStart ?? 5) as number} min={1} max={20} step={0.5} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ frequencyStart: v, frequencyEnd: v }, { frequency: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Speed" paramKey="speed" value={(m.speedStart ?? 1) as number} min={0} max={5} step={0.1} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ speedStart: v, speedEnd: v }, { speed: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'radialChromatic') {
+                const r = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Strength" paramKey="strength" value={(r.strengthStart ?? 0.05) as number} min={0} max={0.25} step={0.005} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ strengthStart: v, strengthEnd: v }, { strength: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Exponent" paramKey="exponent" value={(r.exponentStart ?? 2) as number} min={0.5} max={4} step={0.1} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ exponentStart: v, exponentEnd: v }, { exponent: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'fisheye') {
+                const f = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Strength" paramKey="strength" value={(f.strengthStart ?? 3) as number} min={0.5} max={15} step={0.1} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ strengthStart: v, strengthEnd: v }, { strength: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'pixelShatter') {
+                const p = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Scale (cell count)" paramKey="scale" value={(p.scaleStart ?? 20) as number} min={5} max={50} step={1} format={(x) => String(Math.round(x))} onChange={(v) => onSliderChange({ scaleStart: v, scaleEnd: v }, { scale: v })} onKeyframe={(p2) => onKf(p2)} {...kfProps} />
+                    <SliderWithKeyframe label="Strength" paramKey="strength" value={(p.strengthStart ?? 0.05) as number} min={0} max={0.2} step={0.005} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ strengthStart: v, strengthEnd: v }, { strength: v })} onKeyframe={(p2) => onKf(p2)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'tunnel') {
+                const t = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Strength" paramKey="strength" value={(t.strengthStart ?? 0.3) as number} min={-1} max={1} step={0.02} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ strengthStart: v, strengthEnd: v }, { strength: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Center X" paramKey="centerX" value={(t.centerXStart ?? 0.5) as number} min={0} max={1} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ centerXStart: v, centerXEnd: v }, { centerX: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Center Y" paramKey="centerY" value={(t.centerYStart ?? 0.5) as number} min={0} max={1} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ centerYStart: v, centerYEnd: v }, { centerY: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
+              if (effectType === 'noiseWarp') {
+                const n = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Strength" paramKey="strength" value={(n.strengthStart ?? 0.05) as number} min={0} max={0.15} step={0.005} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ strengthStart: v, strengthEnd: v }, { strength: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Scale" paramKey="scale" value={(n.scaleStart ?? 5) as number} min={1} max={20} step={0.5} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ scaleStart: v, scaleEnd: v }, { scale: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Speed" paramKey="speed" value={(n.speedStart ?? 1) as number} min={0} max={5} step={0.1} format={(x) => x.toFixed(1)} onChange={(v) => onSliderChange({ speedStart: v, speedEnd: v }, { speed: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
               return null
             })()}
             {hasTrack && (
@@ -545,6 +721,31 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                     .sort((a, b) => a.time - b.time)
                     .map((kf) => {
                       const originalIndex = track!.keyframes.indexOf(kf)
+                      const v = kf as unknown as Record<string, number>
+                      let kfLabel = ''
+                      const fmt = (x: number | undefined, fn: (n: number) => string) => x !== undefined ? fn(x) : null
+                      switch (effectType) {
+                        case 'camera': kfLabel = fmt(v.fov, (n) => `${Math.round(n)}°`) ?? ''; break
+                        case 'grain': kfLabel = fmt(v.opacity, (n) => `${(n * 100).toFixed(0)}%`) ?? ''; break
+                        case 'dither': kfLabel = fmt(v.intensity, (n) => `${(n * 100).toFixed(0)}%`) ?? ''; break
+                        case 'dof': kfLabel = [fmt(v.focusDistance, (n) => `fd:${n.toFixed(3)}`), fmt(v.focusRange, (n) => `fr:${n.toFixed(2)}`), fmt(v.bokehScale, (n) => `bk:${n.toFixed(1)}`)].filter(Boolean).join(' '); break
+                        case 'handheld': kfLabel = fmt(v.intensity, (n) => `int:${n.toFixed(3)}`) ?? ''; break
+                        case 'chromaticAberration': kfLabel = fmt(v.offset, (n) => `off:${(n * 1000).toFixed(1)}`) ?? ''; break
+                        case 'lensDistortion': kfLabel = fmt(v.distortion, (n) => `dist:${n.toFixed(3)}`) ?? ''; break
+                        case 'glitch': kfLabel = fmt(v.ratio, (n) => `r:${n.toFixed(2)}`) ?? ''; break
+                        case 'scanline': kfLabel = fmt(v.density, (n) => `d:${n.toFixed(1)}`) ?? ''; break
+                        case 'vignette': kfLabel = fmt(v.darkness, (n) => `dark:${n.toFixed(2)}`) ?? ''; break
+                        case 'swirl': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(1)}`) ?? ''; break
+                        case 'wave': kfLabel = fmt(v.amplitudeX, (n) => `ampX:${n.toFixed(3)}`) ?? ''; break
+                        case 'pinch': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(2)}`) ?? ''; break
+                        case 'kaleidoscope': kfLabel = fmt(v.segments, (n) => `seg:${Math.round(n)}`) ?? ''; break
+                        case 'melt': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(2)}`) ?? ''; break
+                        case 'radialChromatic': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(3)}`) ?? ''; break
+                        case 'fisheye': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(1)}`) ?? ''; break
+                        case 'pixelShatter': kfLabel = fmt(v.scale, (n) => `sc:${Math.round(n)}`) ?? ''; break
+                        case 'tunnel': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(2)}`) ?? ''; break
+                        case 'noiseWarp': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(3)}`) ?? ''; break
+                      }
                       return (
                         <div
                           key={`${kf.time}-${originalIndex}`}
@@ -558,19 +759,7 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                           >
                             {formatTime(kf.time)}
                           </button>
-                          <span className="text-white/40 shrink-0">
-                            {effectType === 'camera' && 'fov' in kf
-                              ? `${Math.round((kf as { fov: number }).fov)}°`
-                              : effectType === 'grain' && 'opacity' in kf
-                                ? `${((kf as { opacity: number }).opacity * 100).toFixed(0)}%`
-                                : effectType === 'dither' && 'intensity' in kf
-                                  ? `${((kf as { intensity: number }).intensity * 100).toFixed(0)}%`
-                                  : effectType === 'dof' && 'focusDistance' in kf
-                                    ? `focus ${(kf as { focusDistance: number }).focusDistance.toFixed(3)}`
-                                    : effectType === 'vignette' && 'darkness' in kf
-                                      ? `dark ${(kf as { darkness: number }).darkness.toFixed(2)}`
-                                      : ''}
-                          </span>
+                          <span className="text-white/40 shrink-0">{kfLabel}</span>
                           <button
                             type="button"
                             onClick={() => removeGlobalEffectKeyframe(effectType, originalIndex)}

@@ -174,6 +174,124 @@ export interface SceneEffectScanline {
   scrollSpeed: number
 }
 
+/** Swirl/vortex rotation around a focal point. Keyframed start/end. */
+export interface SceneEffectSwirl {
+  type: 'swirl'
+  enabled: boolean
+  strengthStart: number
+  strengthEnd: number
+  radiusStart: number
+  radiusEnd: number
+  centerXStart: number
+  centerXEnd: number
+  centerYStart: number
+  centerYEnd: number
+}
+
+/** Sinusoidal UV wave ripple. Animates over time. Keyframed start/end. */
+export interface SceneEffectWave {
+  type: 'wave'
+  enabled: boolean
+  amplitudeXStart: number
+  amplitudeXEnd: number
+  amplitudeYStart: number
+  amplitudeYEnd: number
+  frequencyXStart: number
+  frequencyXEnd: number
+  frequencyYStart: number
+  frequencyYEnd: number
+  speedStart: number
+  speedEnd: number
+}
+
+/** Pinch/bulge from a focal point. Keyframed start/end. */
+export interface SceneEffectPinch {
+  type: 'pinch'
+  enabled: boolean
+  strengthStart: number
+  strengthEnd: number
+  radiusStart: number
+  radiusEnd: number
+  centerXStart: number
+  centerXEnd: number
+  centerYStart: number
+  centerYEnd: number
+}
+
+/** Polar-coordinate mirror kaleidoscope folding. Keyframed start/end. */
+export interface SceneEffectKaleidoscope {
+  type: 'kaleidoscope'
+  enabled: boolean
+  segmentsStart: number
+  segmentsEnd: number
+  rotationStart: number
+  rotationEnd: number
+}
+
+/** Dalí-style dripping/melting downward. Animates over time. Keyframed start/end. */
+export interface SceneEffectMelt {
+  type: 'melt'
+  enabled: boolean
+  strengthStart: number
+  strengthEnd: number
+  frequencyStart: number
+  frequencyEnd: number
+  speedStart: number
+  speedEnd: number
+}
+
+/** R/G/B channels radially separated from center. Keyframed start/end. */
+export interface SceneEffectRadialChromatic {
+  type: 'radialChromatic'
+  enabled: boolean
+  strengthStart: number
+  strengthEnd: number
+  exponentStart: number
+  exponentEnd: number
+}
+
+/** Extreme barrel fisheye (atan model, no black border). Keyframed start/end. */
+export interface SceneEffectFisheye {
+  type: 'fisheye'
+  enabled: boolean
+  strengthStart: number
+  strengthEnd: number
+}
+
+/** Voronoi cell UV offsets — cracked-glass look. Keyframed start/end. */
+export interface SceneEffectPixelShatter {
+  type: 'pixelShatter'
+  enabled: boolean
+  scaleStart: number
+  scaleEnd: number
+  strengthStart: number
+  strengthEnd: number
+}
+
+/** Radial zoom-tunnel from center. Keyframed start/end. */
+export interface SceneEffectTunnel {
+  type: 'tunnel'
+  enabled: boolean
+  strengthStart: number
+  strengthEnd: number
+  centerXStart: number
+  centerXEnd: number
+  centerYStart: number
+  centerYEnd: number
+}
+
+/** Organic 2D value-noise UV displacement. Animates over time. Keyframed start/end. */
+export interface SceneEffectNoiseWarp {
+  type: 'noiseWarp'
+  enabled: boolean
+  strengthStart: number
+  strengthEnd: number
+  scaleStart: number
+  scaleEnd: number
+  speedStart: number
+  speedEnd: number
+}
+
 export type SceneEffect =
   | SceneEffectZoom
   | SceneEffectGrain
@@ -185,6 +303,16 @@ export type SceneEffect =
   | SceneEffectGlitch
   | SceneEffectVignette
   | SceneEffectScanline
+  | SceneEffectSwirl
+  | SceneEffectWave
+  | SceneEffectPinch
+  | SceneEffectKaleidoscope
+  | SceneEffectMelt
+  | SceneEffectRadialChromatic
+  | SceneEffectFisheye
+  | SceneEffectPixelShatter
+  | SceneEffectTunnel
+  | SceneEffectNoiseWarp
 
 /** Effect types that can be driven by global keyframes (timeline). */
 export type GlobalEffectType =
@@ -198,6 +326,16 @@ export type GlobalEffectType =
   | 'glitch'
   | 'vignette'
   | 'scanline'
+  | 'swirl'
+  | 'wave'
+  | 'pinch'
+  | 'kaleidoscope'
+  | 'melt'
+  | 'radialChromatic'
+  | 'fisheye'
+  | 'pixelShatter'
+  | 'tunnel'
+  | 'noiseWarp'
 
 /** One keyframe for a global effect: time in seconds (project timeline) + interpolatable params. */
 export interface GlobalEffectKeyframeGrain {
@@ -272,6 +410,76 @@ export interface GlobalEffectKeyframeCamera {
   fov: number
 }
 
+export interface GlobalEffectKeyframeSwirl {
+  time: number
+  enabled?: boolean
+  strength: number
+  radius: number
+  centerX: number
+  centerY: number
+}
+export interface GlobalEffectKeyframeWave {
+  time: number
+  enabled?: boolean
+  amplitudeX: number
+  amplitudeY: number
+  frequencyX: number
+  frequencyY: number
+  speed: number
+}
+export interface GlobalEffectKeyframePinch {
+  time: number
+  enabled?: boolean
+  strength: number
+  radius: number
+  centerX: number
+  centerY: number
+}
+export interface GlobalEffectKeyframeKaleidoscope {
+  time: number
+  enabled?: boolean
+  segments: number
+  rotation: number
+}
+export interface GlobalEffectKeyframeMelt {
+  time: number
+  enabled?: boolean
+  strength: number
+  frequency: number
+  speed: number
+}
+export interface GlobalEffectKeyframeRadialChromatic {
+  time: number
+  enabled?: boolean
+  strength: number
+  exponent: number
+}
+export interface GlobalEffectKeyframeFisheye {
+  time: number
+  enabled?: boolean
+  strength: number
+}
+export interface GlobalEffectKeyframePixelShatter {
+  time: number
+  enabled?: boolean
+  scale: number
+  strength: number
+}
+export interface GlobalEffectKeyframeTunnel {
+  time: number
+  enabled?: boolean
+  strength: number
+  centerX: number
+  centerY: number
+}
+export interface GlobalEffectKeyframeNoiseWarp {
+  time: number
+  enabled?: boolean
+  strength: number
+  scale: number
+  speed: number
+}
+
 export type GlobalEffectKeyframe =
   | GlobalEffectKeyframeCamera
   | GlobalEffectKeyframeGrain
@@ -283,6 +491,16 @@ export type GlobalEffectKeyframe =
   | GlobalEffectKeyframeGlitch
   | GlobalEffectKeyframeVignette
   | GlobalEffectKeyframeScanline
+  | GlobalEffectKeyframeSwirl
+  | GlobalEffectKeyframeWave
+  | GlobalEffectKeyframePinch
+  | GlobalEffectKeyframeKaleidoscope
+  | GlobalEffectKeyframeMelt
+  | GlobalEffectKeyframeRadialChromatic
+  | GlobalEffectKeyframeFisheye
+  | GlobalEffectKeyframePixelShatter
+  | GlobalEffectKeyframeTunnel
+  | GlobalEffectKeyframeNoiseWarp
 
 export interface GlobalEffectTrack {
   enabled: boolean
@@ -590,6 +808,104 @@ export function createDefaultScene(id: string): Scene {
         enabled: false,
         density: 1.5,
         scrollSpeed: 0,
+      },
+      {
+        type: 'swirl',
+        enabled: false,
+        strengthStart: 2.0,
+        strengthEnd: 2.0,
+        radiusStart: 0.5,
+        radiusEnd: 0.5,
+        centerXStart: 0.5,
+        centerXEnd: 0.5,
+        centerYStart: 0.5,
+        centerYEnd: 0.5,
+      },
+      {
+        type: 'wave',
+        enabled: false,
+        amplitudeXStart: 0.02,
+        amplitudeXEnd: 0.02,
+        amplitudeYStart: 0.02,
+        amplitudeYEnd: 0.02,
+        frequencyXStart: 5.0,
+        frequencyXEnd: 5.0,
+        frequencyYStart: 5.0,
+        frequencyYEnd: 5.0,
+        speedStart: 1.0,
+        speedEnd: 1.0,
+      },
+      {
+        type: 'pinch',
+        enabled: false,
+        strengthStart: 0.5,
+        strengthEnd: 0.5,
+        radiusStart: 0.5,
+        radiusEnd: 0.5,
+        centerXStart: 0.5,
+        centerXEnd: 0.5,
+        centerYStart: 0.5,
+        centerYEnd: 0.5,
+      },
+      {
+        type: 'kaleidoscope',
+        enabled: false,
+        segmentsStart: 6,
+        segmentsEnd: 6,
+        rotationStart: 0,
+        rotationEnd: 0,
+      },
+      {
+        type: 'melt',
+        enabled: false,
+        strengthStart: 0.1,
+        strengthEnd: 0.1,
+        frequencyStart: 5.0,
+        frequencyEnd: 5.0,
+        speedStart: 1.0,
+        speedEnd: 1.0,
+      },
+      {
+        type: 'radialChromatic',
+        enabled: false,
+        strengthStart: 0.05,
+        strengthEnd: 0.05,
+        exponentStart: 2.0,
+        exponentEnd: 2.0,
+      },
+      {
+        type: 'fisheye',
+        enabled: false,
+        strengthStart: 3.0,
+        strengthEnd: 3.0,
+      },
+      {
+        type: 'pixelShatter',
+        enabled: false,
+        scaleStart: 20.0,
+        scaleEnd: 20.0,
+        strengthStart: 0.05,
+        strengthEnd: 0.05,
+      },
+      {
+        type: 'tunnel',
+        enabled: false,
+        strengthStart: 0.3,
+        strengthEnd: 0.3,
+        centerXStart: 0.5,
+        centerXEnd: 0.5,
+        centerYStart: 0.5,
+        centerYEnd: 0.5,
+      },
+      {
+        type: 'noiseWarp',
+        enabled: false,
+        strengthStart: 0.05,
+        strengthEnd: 0.05,
+        scaleStart: 5.0,
+        scaleEnd: 5.0,
+        speedStart: 1.0,
+        speedEnd: 1.0,
       },
     ],
     texts: [],

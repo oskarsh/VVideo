@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import type { Project, Scene, FlyoverKeyframeWithTime, SceneEffectDither, PlaneMedia, Pane, GlobalEffectType, GlobalEffectTrack, GlobalEffectKeyframe, BackgroundTexture } from '@/types'
 import { createDefaultProject, createDefaultScene, createDefaultPane, createDefaultSceneText, DEFAULT_DITHER, getPlaneMedia } from '@/types'
-import { DEFAULT_GLOBAL_KEYFRAMES } from '@/lib/globalEffects'
 import { getPresets, getSelectedPresetId, DEFAULT_PRESET_ID, applyPresetKeepKeyframes } from '@/lib/presets'
 
 function getInitialProject(): Project {
@@ -115,6 +114,7 @@ interface EditorState {
   /** Update non-keyframe base params on an existing track (no history entry). Used for live slider preview. */
   setGlobalEffectParams: (effectType: GlobalEffectType, params: Record<string, unknown>) => void
   resetProject: () => void
+  openProject: (project: Project) => void
   /** When trim editor is open: which video is being edited and time to show in main canvas. */
   trimScrub:
   | { video: 'background'; time: number }
@@ -676,11 +676,10 @@ export const useStore = create<EditorState>((set) => ({
         const keyframes = [...(prev?.keyframes ?? [])]
         const TIME_EPS = 0.001
         const idx = keyframes.findIndex((k) => Math.abs(k.time - time) < TIME_EPS)
-        const defaultKf = { ...DEFAULT_GLOBAL_KEYFRAMES[effectType], time } as GlobalEffectKeyframe
         if (idx >= 0) {
           keyframes[idx] = { ...keyframes[idx], ...patch } as GlobalEffectKeyframe
         } else {
-          keyframes.push({ ...defaultKf, ...patch, time } as GlobalEffectKeyframe)
+          keyframes.push({ time, ...patch } as GlobalEffectKeyframe)
           keyframes.sort((a, b) => a.time - b.time)
         }
         return {
@@ -716,6 +715,15 @@ export const useStore = create<EditorState>((set) => ({
       project: getInitialProject(),
       currentSceneIndex: 0,
       currentTime: 0,
+      historyPast: [],
+      historyFuture: [],
+    }),
+  openProject: (project) =>
+    set({
+      project,
+      currentSceneIndex: 0,
+      currentTime: 0,
+      isPlaying: false,
       historyPast: [],
       historyFuture: [],
     }),

@@ -16,6 +16,35 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '2.0.14',
+    date: '2026-02-28',
+    summary: 'Per-parameter keyframe lanes and keyframe bug fix.',
+    items: [
+      'Each effect parameter gets its own labeled lane in the timeline (e.g. DoF · Bokeh scale).',
+      'Fixed: adding a keyframe for one parameter (e.g. bokeh scale) no longer overwrites other params with defaults.',
+      'Keyframe button now only affects the parameter you clicked; other params keep their current values.',
+    ],
+  },
+  {
+    version: '2.0.13',
+    date: '2026-02-28',
+    summary: 'Global camera FOV works without adding a keyframe.',
+    items: [
+      'FOV slider in the Camera effect panel now affects the view immediately when you drag it.',
+      'Previously you had to add a keyframe first for the value to take effect; it now works by default.',
+      'FOV no longer resets when you move the camera with orbit or WASD during editing.',
+    ],
+  },
+  {
+    version: '2.0.12',
+    date: '2026-02-28',
+    summary: 'Set keyframe overwrites when playhead is at existing keyframe.',
+    items: [
+      'When you add a camera keyframe with the playhead at an existing keyframe (or a selected keyframe), it now replaces that keyframe instead of adding a duplicate.',
+      'Keeps the timeline clean and avoids stacking keyframes at the same time.',
+    ],
+  },
+  {
     version: '2.0.11',
     date: '2026-02-25',
     summary: 'Choose WebM or MP4 export format.',

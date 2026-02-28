@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.0.14 — 2026-02-28
+
+**Per-parameter keyframe lanes and keyframe bug fix.**
+
+- Each effect parameter gets its own labeled lane in the timeline (e.g. DoF · Bokeh scale).
+- Fixed: adding a keyframe for one parameter (e.g. bokeh scale) no longer overwrites other params with defaults.
+- Keyframe button now only affects the parameter you clicked; other params keep their current values.
+
+---
+
+## 2.0.13 — 2026-02-28
+
+**Global camera FOV works without adding a keyframe.**
+
+- FOV slider in the Camera effect panel now affects the view immediately when you drag it.
+- Previously you had to add a keyframe first for the value to take effect; it now works by default.
+- FOV no longer resets when you move the camera with orbit or WASD during editing.
+
+---
+
+## 2.0.12 — 2026-02-28
+
+**Set keyframe overwrites when playhead is at existing keyframe.**
+
+- When you add a camera keyframe with the playhead at an existing keyframe (or a selected keyframe), it now replaces that keyframe instead of adding a duplicate.
+- Keeps the timeline clean and avoids stacking keyframes at the same time.
+
+---
+
 ## 2.0.11 — 2026-02-25
 
 **Choose WebM or MP4 export format.**

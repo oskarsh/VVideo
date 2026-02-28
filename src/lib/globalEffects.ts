@@ -18,6 +18,16 @@ import type {
   GlobalEffectKeyframeGlitch,
   GlobalEffectKeyframeVignette,
   GlobalEffectKeyframeScanline,
+  GlobalEffectKeyframeSwirl,
+  GlobalEffectKeyframeWave,
+  GlobalEffectKeyframePinch,
+  GlobalEffectKeyframeKaleidoscope,
+  GlobalEffectKeyframeMelt,
+  GlobalEffectKeyframeRadialChromatic,
+  GlobalEffectKeyframeFisheye,
+  GlobalEffectKeyframePixelShatter,
+  GlobalEffectKeyframeTunnel,
+  GlobalEffectKeyframeNoiseWarp,
   GlitchAlgorithm,
 } from '@/types'
 
@@ -180,6 +190,114 @@ export function getGlobalEffectStateAtTime(
           density: (p.density ?? def.density ?? 1.5) as number,
           scrollSpeed: (p.scrollSpeed ?? def.scrollSpeed ?? 0) as number,
         }
+      case 'swirl':
+        return {
+          type: 'swirl',
+          enabled,
+          strengthStart: (p.strength ?? def.strength ?? 2.0) as number,
+          strengthEnd: (p.strength ?? def.strength ?? 2.0) as number,
+          radiusStart: (p.radius ?? def.radius ?? 0.5) as number,
+          radiusEnd: (p.radius ?? def.radius ?? 0.5) as number,
+          centerXStart: (p.centerX ?? def.centerX ?? 0.5) as number,
+          centerXEnd: (p.centerX ?? def.centerX ?? 0.5) as number,
+          centerYStart: (p.centerY ?? def.centerY ?? 0.5) as number,
+          centerYEnd: (p.centerY ?? def.centerY ?? 0.5) as number,
+        }
+      case 'wave':
+        return {
+          type: 'wave',
+          enabled,
+          amplitudeXStart: (p.amplitudeX ?? def.amplitudeX ?? 0.02) as number,
+          amplitudeXEnd: (p.amplitudeX ?? def.amplitudeX ?? 0.02) as number,
+          amplitudeYStart: (p.amplitudeY ?? def.amplitudeY ?? 0.02) as number,
+          amplitudeYEnd: (p.amplitudeY ?? def.amplitudeY ?? 0.02) as number,
+          frequencyXStart: (p.frequencyX ?? def.frequencyX ?? 5.0) as number,
+          frequencyXEnd: (p.frequencyX ?? def.frequencyX ?? 5.0) as number,
+          frequencyYStart: (p.frequencyY ?? def.frequencyY ?? 5.0) as number,
+          frequencyYEnd: (p.frequencyY ?? def.frequencyY ?? 5.0) as number,
+          speedStart: (p.speed ?? def.speed ?? 1.0) as number,
+          speedEnd: (p.speed ?? def.speed ?? 1.0) as number,
+        }
+      case 'pinch':
+        return {
+          type: 'pinch',
+          enabled,
+          strengthStart: (p.strength ?? def.strength ?? 0.5) as number,
+          strengthEnd: (p.strength ?? def.strength ?? 0.5) as number,
+          radiusStart: (p.radius ?? def.radius ?? 0.5) as number,
+          radiusEnd: (p.radius ?? def.radius ?? 0.5) as number,
+          centerXStart: (p.centerX ?? def.centerX ?? 0.5) as number,
+          centerXEnd: (p.centerX ?? def.centerX ?? 0.5) as number,
+          centerYStart: (p.centerY ?? def.centerY ?? 0.5) as number,
+          centerYEnd: (p.centerY ?? def.centerY ?? 0.5) as number,
+        }
+      case 'kaleidoscope':
+        return {
+          type: 'kaleidoscope',
+          enabled,
+          segmentsStart: (p.segments ?? def.segments ?? 6) as number,
+          segmentsEnd: (p.segments ?? def.segments ?? 6) as number,
+          rotationStart: (p.rotation ?? def.rotation ?? 0) as number,
+          rotationEnd: (p.rotation ?? def.rotation ?? 0) as number,
+        }
+      case 'melt':
+        return {
+          type: 'melt',
+          enabled,
+          strengthStart: (p.strength ?? def.strength ?? 0.1) as number,
+          strengthEnd: (p.strength ?? def.strength ?? 0.1) as number,
+          frequencyStart: (p.frequency ?? def.frequency ?? 5.0) as number,
+          frequencyEnd: (p.frequency ?? def.frequency ?? 5.0) as number,
+          speedStart: (p.speed ?? def.speed ?? 1.0) as number,
+          speedEnd: (p.speed ?? def.speed ?? 1.0) as number,
+        }
+      case 'radialChromatic':
+        return {
+          type: 'radialChromatic',
+          enabled,
+          strengthStart: (p.strength ?? def.strength ?? 0.05) as number,
+          strengthEnd: (p.strength ?? def.strength ?? 0.05) as number,
+          exponentStart: (p.exponent ?? def.exponent ?? 2.0) as number,
+          exponentEnd: (p.exponent ?? def.exponent ?? 2.0) as number,
+        }
+      case 'fisheye':
+        return {
+          type: 'fisheye',
+          enabled,
+          strengthStart: (p.strength ?? def.strength ?? 3.0) as number,
+          strengthEnd: (p.strength ?? def.strength ?? 3.0) as number,
+        }
+      case 'pixelShatter':
+        return {
+          type: 'pixelShatter',
+          enabled,
+          scaleStart: (p.scale ?? def.scale ?? 20.0) as number,
+          scaleEnd: (p.scale ?? def.scale ?? 20.0) as number,
+          strengthStart: (p.strength ?? def.strength ?? 0.05) as number,
+          strengthEnd: (p.strength ?? def.strength ?? 0.05) as number,
+        }
+      case 'tunnel':
+        return {
+          type: 'tunnel',
+          enabled,
+          strengthStart: (p.strength ?? def.strength ?? 0.3) as number,
+          strengthEnd: (p.strength ?? def.strength ?? 0.3) as number,
+          centerXStart: (p.centerX ?? def.centerX ?? 0.5) as number,
+          centerXEnd: (p.centerX ?? def.centerX ?? 0.5) as number,
+          centerYStart: (p.centerY ?? def.centerY ?? 0.5) as number,
+          centerYEnd: (p.centerY ?? def.centerY ?? 0.5) as number,
+        }
+      case 'noiseWarp':
+        return {
+          type: 'noiseWarp',
+          enabled,
+          strengthStart: (p.strength ?? def.strength ?? 0.05) as number,
+          strengthEnd: (p.strength ?? def.strength ?? 0.05) as number,
+          scaleStart: (p.scale ?? def.scale ?? 5.0) as number,
+          scaleEnd: (p.scale ?? def.scale ?? 5.0) as number,
+          speedStart: (p.speed ?? def.speed ?? 1.0) as number,
+          speedEnd: (p.speed ?? def.speed ?? 1.0) as number,
+        }
       default:
         return null
     }
@@ -276,6 +394,65 @@ export function getGlobalEffectStateAtTime(
         density: sampleNum(kfs, time, 'density', 1.5),
         scrollSpeed: sampleNum(kfs, time, 'scrollSpeed', 0),
       }
+    case 'swirl': {
+      const s = sampleNum(kfs, time, 'strength', 2.0)
+      const r = sampleNum(kfs, time, 'radius', 0.5)
+      const cx = sampleNum(kfs, time, 'centerX', 0.5)
+      const cy = sampleNum(kfs, time, 'centerY', 0.5)
+      return { type: 'swirl', enabled, strengthStart: s, strengthEnd: s, radiusStart: r, radiusEnd: r, centerXStart: cx, centerXEnd: cx, centerYStart: cy, centerYEnd: cy }
+    }
+    case 'wave': {
+      const ax = sampleNum(kfs, time, 'amplitudeX', 0.02)
+      const ay = sampleNum(kfs, time, 'amplitudeY', 0.02)
+      const fx = sampleNum(kfs, time, 'frequencyX', 5.0)
+      const fy = sampleNum(kfs, time, 'frequencyY', 5.0)
+      const sp = sampleNum(kfs, time, 'speed', 1.0)
+      return { type: 'wave', enabled, amplitudeXStart: ax, amplitudeXEnd: ax, amplitudeYStart: ay, amplitudeYEnd: ay, frequencyXStart: fx, frequencyXEnd: fx, frequencyYStart: fy, frequencyYEnd: fy, speedStart: sp, speedEnd: sp }
+    }
+    case 'pinch': {
+      const s = sampleNum(kfs, time, 'strength', 0.5)
+      const r = sampleNum(kfs, time, 'radius', 0.5)
+      const cx = sampleNum(kfs, time, 'centerX', 0.5)
+      const cy = sampleNum(kfs, time, 'centerY', 0.5)
+      return { type: 'pinch', enabled, strengthStart: s, strengthEnd: s, radiusStart: r, radiusEnd: r, centerXStart: cx, centerXEnd: cx, centerYStart: cy, centerYEnd: cy }
+    }
+    case 'kaleidoscope': {
+      const seg = sampleNum(kfs, time, 'segments', 6)
+      const rot = sampleNum(kfs, time, 'rotation', 0)
+      return { type: 'kaleidoscope', enabled, segmentsStart: seg, segmentsEnd: seg, rotationStart: rot, rotationEnd: rot }
+    }
+    case 'melt': {
+      const s = sampleNum(kfs, time, 'strength', 0.1)
+      const f = sampleNum(kfs, time, 'frequency', 5.0)
+      const sp = sampleNum(kfs, time, 'speed', 1.0)
+      return { type: 'melt', enabled, strengthStart: s, strengthEnd: s, frequencyStart: f, frequencyEnd: f, speedStart: sp, speedEnd: sp }
+    }
+    case 'radialChromatic': {
+      const s = sampleNum(kfs, time, 'strength', 0.05)
+      const e = sampleNum(kfs, time, 'exponent', 2.0)
+      return { type: 'radialChromatic', enabled, strengthStart: s, strengthEnd: s, exponentStart: e, exponentEnd: e }
+    }
+    case 'fisheye': {
+      const s = sampleNum(kfs, time, 'strength', 3.0)
+      return { type: 'fisheye', enabled, strengthStart: s, strengthEnd: s }
+    }
+    case 'pixelShatter': {
+      const sc = sampleNum(kfs, time, 'scale', 20.0)
+      const s = sampleNum(kfs, time, 'strength', 0.05)
+      return { type: 'pixelShatter', enabled, scaleStart: sc, scaleEnd: sc, strengthStart: s, strengthEnd: s }
+    }
+    case 'tunnel': {
+      const s = sampleNum(kfs, time, 'strength', 0.3)
+      const cx = sampleNum(kfs, time, 'centerX', 0.5)
+      const cy = sampleNum(kfs, time, 'centerY', 0.5)
+      return { type: 'tunnel', enabled, strengthStart: s, strengthEnd: s, centerXStart: cx, centerXEnd: cx, centerYStart: cy, centerYEnd: cy }
+    }
+    case 'noiseWarp': {
+      const s = sampleNum(kfs, time, 'strength', 0.05)
+      const sc = sampleNum(kfs, time, 'scale', 5.0)
+      const sp = sampleNum(kfs, time, 'speed', 1.0)
+      return { type: 'noiseWarp', enabled, strengthStart: s, strengthEnd: s, scaleStart: sc, scaleEnd: sc, speedStart: sp, speedEnd: sp }
+    }
     default:
       return null
   }
@@ -326,6 +503,16 @@ export const DEFAULT_GLOBAL_KEYFRAMES: Record<GlobalEffectType, GlobalEffectKeyf
   },
   vignette: { time: 0, enabled: false, offset: 0.5, darkness: 0.5 },
   scanline: { time: 0, enabled: false, density: 1.5, scrollSpeed: 0 },
+  swirl: { time: 0, enabled: false, strength: 2.0, radius: 0.5, centerX: 0.5, centerY: 0.5 },
+  wave: { time: 0, enabled: false, amplitudeX: 0.02, amplitudeY: 0.02, frequencyX: 5.0, frequencyY: 5.0, speed: 1.0 },
+  pinch: { time: 0, enabled: false, strength: 0.5, radius: 0.5, centerX: 0.5, centerY: 0.5 },
+  kaleidoscope: { time: 0, enabled: false, segments: 6, rotation: 0 },
+  melt: { time: 0, enabled: false, strength: 0.1, frequency: 5.0, speed: 1.0 },
+  radialChromatic: { time: 0, enabled: false, strength: 0.05, exponent: 2.0 },
+  fisheye: { time: 0, enabled: false, strength: 3.0 },
+  pixelShatter: { time: 0, enabled: false, scale: 20.0, strength: 0.05 },
+  tunnel: { time: 0, enabled: false, strength: 0.3, centerX: 0.5, centerY: 0.5 },
+  noiseWarp: { time: 0, enabled: false, strength: 0.05, scale: 5.0, speed: 1.0 },
 }
 
 /** Create a keyframe at time `time` with same values as current state (from scene or defaults). */
@@ -413,6 +600,85 @@ export function createKeyframeAtTime(
         enabled: (currentState.enabled ?? def.enabled) as boolean,
         density: (currentState.density ?? (DEFAULT_GLOBAL_KEYFRAMES.scanline as GlobalEffectKeyframeScanline).density) as number,
         scrollSpeed: (currentState.scrollSpeed ?? (DEFAULT_GLOBAL_KEYFRAMES.scanline as GlobalEffectKeyframeScanline).scrollSpeed) as number,
+      }
+    case 'swirl':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.swirl as GlobalEffectKeyframeSwirl).strength) as number,
+        radius: (currentState.radiusStart ?? currentState.radiusEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.swirl as GlobalEffectKeyframeSwirl).radius) as number,
+        centerX: (currentState.centerXStart ?? currentState.centerXEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.swirl as GlobalEffectKeyframeSwirl).centerX) as number,
+        centerY: (currentState.centerYStart ?? currentState.centerYEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.swirl as GlobalEffectKeyframeSwirl).centerY) as number,
+      }
+    case 'wave':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        amplitudeX: (currentState.amplitudeXStart ?? currentState.amplitudeXEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.wave as GlobalEffectKeyframeWave).amplitudeX) as number,
+        amplitudeY: (currentState.amplitudeYStart ?? currentState.amplitudeYEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.wave as GlobalEffectKeyframeWave).amplitudeY) as number,
+        frequencyX: (currentState.frequencyXStart ?? currentState.frequencyXEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.wave as GlobalEffectKeyframeWave).frequencyX) as number,
+        frequencyY: (currentState.frequencyYStart ?? currentState.frequencyYEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.wave as GlobalEffectKeyframeWave).frequencyY) as number,
+        speed: (currentState.speedStart ?? currentState.speedEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.wave as GlobalEffectKeyframeWave).speed) as number,
+      }
+    case 'pinch':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.pinch as GlobalEffectKeyframePinch).strength) as number,
+        radius: (currentState.radiusStart ?? currentState.radiusEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.pinch as GlobalEffectKeyframePinch).radius) as number,
+        centerX: (currentState.centerXStart ?? currentState.centerXEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.pinch as GlobalEffectKeyframePinch).centerX) as number,
+        centerY: (currentState.centerYStart ?? currentState.centerYEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.pinch as GlobalEffectKeyframePinch).centerY) as number,
+      }
+    case 'kaleidoscope':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        segments: (currentState.segmentsStart ?? currentState.segmentsEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.kaleidoscope as GlobalEffectKeyframeKaleidoscope).segments) as number,
+        rotation: (currentState.rotationStart ?? currentState.rotationEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.kaleidoscope as GlobalEffectKeyframeKaleidoscope).rotation) as number,
+      }
+    case 'melt':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.melt as GlobalEffectKeyframeMelt).strength) as number,
+        frequency: (currentState.frequencyStart ?? currentState.frequencyEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.melt as GlobalEffectKeyframeMelt).frequency) as number,
+        speed: (currentState.speedStart ?? currentState.speedEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.melt as GlobalEffectKeyframeMelt).speed) as number,
+      }
+    case 'radialChromatic':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.radialChromatic as GlobalEffectKeyframeRadialChromatic).strength) as number,
+        exponent: (currentState.exponentStart ?? currentState.exponentEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.radialChromatic as GlobalEffectKeyframeRadialChromatic).exponent) as number,
+      }
+    case 'fisheye':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.fisheye as GlobalEffectKeyframeFisheye).strength) as number,
+      }
+    case 'pixelShatter':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        scale: (currentState.scaleStart ?? currentState.scaleEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.pixelShatter as GlobalEffectKeyframePixelShatter).scale) as number,
+        strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.pixelShatter as GlobalEffectKeyframePixelShatter).strength) as number,
+      }
+    case 'tunnel':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.tunnel as GlobalEffectKeyframeTunnel).strength) as number,
+        centerX: (currentState.centerXStart ?? currentState.centerXEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.tunnel as GlobalEffectKeyframeTunnel).centerX) as number,
+        centerY: (currentState.centerYStart ?? currentState.centerYEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.tunnel as GlobalEffectKeyframeTunnel).centerY) as number,
+      }
+    case 'noiseWarp':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.noiseWarp as GlobalEffectKeyframeNoiseWarp).strength) as number,
+        scale: (currentState.scaleStart ?? currentState.scaleEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.noiseWarp as GlobalEffectKeyframeNoiseWarp).scale) as number,
+        speed: (currentState.speedStart ?? currentState.speedEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.noiseWarp as GlobalEffectKeyframeNoiseWarp).speed) as number,
       }
     default:
       return { ...def, time } as GlobalEffectKeyframe

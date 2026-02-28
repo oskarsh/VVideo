@@ -3,6 +3,7 @@ import { Copy, X, SkipBack, TrendingUp } from 'lucide-react'
 import { useStore } from '@/store'
 import type { Scene, GlobalEffectType } from '@/types'
 import { getFlyoverKeyframes } from '@/lib/flyover'
+import { GLOBAL_EFFECT_LABELS, GLOBAL_EFFECT_PARAM_LABELS } from '@/lib/effectLabels'
 
 /** First-frame preview for a scene; updates when trim start or video changes. */
 function SceneClipPreview({
@@ -237,9 +238,10 @@ function getSceneAutomationCurves(scene: Scene, sceneIndex: number): AutomationC
 const AUTOMATION_LANE_HEIGHT = 28
 const AUTOMATION_LANE_HEIGHT_COLLAPSED = 20
 const AUTOMATION_LANE_HEIGHT_EXPANDED = 120
-/** Keyframe marker lanes: collapsed height (all lanes), expanded (selected lane only). */
+/** Keyframe marker lanes: collapsed height (all lanes), expanded (per-param or camera). */
 const KEYFRAME_LANE_HEIGHT_COLLAPSED = 24
 const KEYFRAME_LANE_HEIGHT_EXPANDED = 80
+const KEYFRAME_PARAM_ROW_HEIGHT = 20
 const KEYFRAME_DRAG_TIME_EPS = 0.001
 const AUTOMATION_CURVE_COLORS = [
   'rgb(34, 211, 238)',   // cyan
@@ -310,6 +312,8 @@ export function Timeline() {
   )
   const trackRef = useRef<HTMLDivElement>(null)
   const keyframeTrackRef = useRef<HTMLDivElement>(null)
+  // Mutable tracking for the current drag — updated inline so onMove never calls setState
+  const keyframeDragRef = useRef<{ keyframeTime: number; hasMoved: boolean } | null>(null)
 
   const handleScrub = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -386,50 +390,76 @@ export function Timeline() {
     }
   }, [automationDrag, setEffect])
 
-  // Global mouse move/up for keyframe time drag (horizontal); click-without-drag seeks to keyframe
+  // Global mouse move/up for keyframe time drag (horizontal); click-without-drag seeks to keyframe.
+  // IMPORTANT: keyframeDrag is intentionally NOT in the dep array — we only want to attach/detach listeners
+  // when a drag starts or stops. Tracking the current position uses a ref so onMove never calls setState,
+  // which previously caused the effect to re-run on every frame (removing+re-adding listeners → cursor flicker).
   useEffect(() => {
-    if (!keyframeDrag || !keyframeTrackRef.current) return
-    const trackRect = keyframeDrag.trackRect
+    if (!keyframeDrag) return
+
+    // Snapshot immutable drag metadata at drag start (captured in closure — won't change mid-drag)
+    const { trackRect, kind, initialTime } = keyframeDrag
+    const effectType = kind === 'global' ? keyframeDrag.effectType : null
+    const sceneIndex = kind === 'camera' ? keyframeDrag.sceneIndex : null
+
+    // Initialize mutable ref for this drag session
+    keyframeDragRef.current = { keyframeTime: keyframeDrag.keyframeTime, hasMoved: false }
+
+    // Lock cursor so it stays 'grabbing' even when mouse leaves the tiny keyframe dot
+    document.body.style.cursor = 'grabbing'
+    document.body.style.userSelect = 'none'
+
     const onMove = (e: MouseEvent) => {
+      const ref = keyframeDragRef.current
+      if (!ref) return
       const x = (e.clientX - trackRect.left) / trackRect.width
       const time = Math.max(0, Math.min(totalDuration, x * totalDuration))
-      if (keyframeDrag.kind === 'global') {
-        const track = project.globalEffects?.[keyframeDrag.effectType]
-        const keyframes = track?.keyframes ?? []
-        const idx = keyframes.findIndex((k) => Math.abs(k.time - keyframeDrag.keyframeTime) < KEYFRAME_DRAG_TIME_EPS)
-        if (idx >= 0) updateGlobalEffectKeyframe(keyframeDrag.effectType, idx, { time })
-        setKeyframeDrag((prev) => (prev && prev.kind === 'global' ? { ...prev, keyframeTime: time, hasMoved: true } : prev))
-      } else {
-        const scene = project.scenes[keyframeDrag.sceneIndex]
+      ref.hasMoved = true
+      if (kind === 'global' && effectType) {
+        // Read latest keyframes from store so we find the correct index after re-sorts
+        const kfs = useStore.getState().project.globalEffects?.[effectType]?.keyframes ?? []
+        const idx = kfs.findIndex((k) => Math.abs(k.time - ref.keyframeTime) < KEYFRAME_DRAG_TIME_EPS)
+        if (idx >= 0) updateGlobalEffectKeyframe(effectType, idx, { time })
+        ref.keyframeTime = time
+      } else if (kind === 'camera' && sceneIndex !== null) {
+        const { project } = useStore.getState()
+        const scene = project.scenes[sceneIndex]
         const duration = scene?.durationSeconds ?? 1
-        const sceneStart = sceneStarts[keyframeDrag.sceneIndex] ?? 0
-        const localTime = time - sceneStart
-        const normalized = Math.max(0, Math.min(1, localTime / duration))
-        const keyframes = scene?.flyover?.keyframes ?? []
-        const idx = keyframes.findIndex((k) => Math.abs(k.time - keyframeDrag.keyframeTime) < KEYFRAME_DRAG_TIME_EPS)
-        if (idx >= 0) updateFlyoverKeyframe(keyframeDrag.sceneIndex, idx, { time: normalized })
-        setKeyframeDrag((prev) => (prev && prev.kind === 'camera' ? { ...prev, keyframeTime: normalized, hasMoved: true } : prev))
+        const sceneStart = sceneStarts[sceneIndex] ?? 0
+        const normalized = Math.max(0, Math.min(1, (time - sceneStart) / duration))
+        const kfs = scene?.flyover?.keyframes ?? []
+        const idx = kfs.findIndex((k) => Math.abs(k.time - ref.keyframeTime) < KEYFRAME_DRAG_TIME_EPS)
+        if (idx >= 0) updateFlyoverKeyframe(sceneIndex, idx, { time: normalized })
+        ref.keyframeTime = normalized
       }
     }
+
     const onUp = () => {
-      if (keyframeDrag && !keyframeDrag.hasMoved) {
-        setCurrentTime(keyframeDrag.initialTime)
-        if (keyframeDrag.kind === 'camera') {
-          setCurrentSceneIndex(keyframeDrag.sceneIndex)
-          setSelectedCameraKeyframe({ sceneIndex: keyframeDrag.sceneIndex, time: keyframeDrag.initialTime })
-        } else {
-          setSelectedKeyframe({ kind: 'global', effectType: keyframeDrag.effectType, time: keyframeDrag.initialTime })
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      const ref = keyframeDragRef.current
+      if (ref && !ref.hasMoved) {
+        setCurrentTime(initialTime)
+        if (kind === 'camera' && sceneIndex !== null) {
+          setCurrentSceneIndex(sceneIndex)
+          setSelectedCameraKeyframe({ sceneIndex, time: initialTime })
+        } else if (kind === 'global' && effectType) {
+          setSelectedKeyframe({ kind: 'global', effectType, time: initialTime })
         }
       }
       setKeyframeDrag(null)
     }
+
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [keyframeDrag, totalDuration, sceneStarts, project.scenes, project.globalEffects, updateGlobalEffectKeyframe, updateFlyoverKeyframe, setCurrentTime, setCurrentSceneIndex, setSelectedCameraKeyframe])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!keyframeDrag]) // Only re-attach when drag starts/stops — not on every position update
 
   const curvesPerScene = project.scenes.map((sc, i) => getSceneAutomationCurves(sc, i))
   const maxLanes = Math.max(1, ...curvesPerScene.map((c) => c.length))
@@ -447,16 +477,32 @@ export function Timeline() {
   const automationHeight = laneHeights.reduce((a, b) => a + b, 0)
 
   const globalKeyframeMarkers: { time: number; type: GlobalEffectType }[] = []
+  const globalKeyframeLanes: { effectType: GlobalEffectType; paramKey: string; paramLabel: string }[] = []
   const globalEffects = project.globalEffects ?? {}
-    ; (Object.keys(globalEffects) as GlobalEffectType[]).forEach((type) => {
-      const track = globalEffects[type]
-      if (track?.keyframes?.length) {
-        track.keyframes.forEach((kf) => {
-          globalKeyframeMarkers.push({ time: kf.time, type })
+  ;(Object.keys(globalEffects) as GlobalEffectType[]).forEach((type) => {
+    const track = globalEffects[type]
+    if (track?.keyframes?.length) {
+      track.keyframes.forEach((kf) => {
+        globalKeyframeMarkers.push({ time: kf.time, type })
+      })
+      const params = GLOBAL_EFFECT_PARAM_LABELS[type]
+      if (params) {
+        params.forEach(({ key, label }) => {
+          // Only add a lane for params that are actually present in at least one keyframe.
+          if (track.keyframes.some((kf) => key in (kf as unknown as Record<string, unknown>))) {
+            globalKeyframeLanes.push({ effectType: type, paramKey: key, paramLabel: label })
+          }
         })
+      } else {
+        globalKeyframeLanes.push({ effectType: type, paramKey: '', paramLabel: GLOBAL_EFFECT_LABELS[type] })
       }
-    })
+    }
+  })
   const hasGlobalKeyframes = globalKeyframeMarkers.length > 0
+  const globalKeyframeExpandedHeight = Math.min(
+    200,
+    KEYFRAME_LANE_HEIGHT_COLLAPSED + globalKeyframeLanes.length * KEYFRAME_PARAM_ROW_HEIGHT
+  )
 
   // Per-scene camera (flyover) keyframes for keyframe editor
   const cameraKeyframeMarkers: { time: number; sceneIndex: number }[] = []
@@ -477,19 +523,6 @@ export function Timeline() {
   const totalFrames = Math.floor(totalDuration * projectFps)
   const sceneDurationFrames = currentScene ? Math.floor(currentScene.durationSeconds * projectFps) : 0
   const sceneLocalFrame = Math.floor(sceneLocalTime * projectFps)
-
-  const globalEffectLabel: Record<GlobalEffectType, string> = {
-    camera: 'Camera',
-    grain: 'Grain',
-    dither: 'Dither',
-    dof: 'DoF',
-    handheld: 'Handheld',
-    chromaticAberration: 'Chromatic',
-    lensDistortion: 'Lens',
-    glitch: 'Glitch',
-    vignette: 'Vignette',
-    scanline: 'Scanline',
-  }
 
   return (
     <div className="flex flex-col min-w-0 overflow-x-hidden border-t border-white/10 bg-zinc-900/95" data-screenshot-target="timeline">
@@ -692,8 +725,8 @@ export function Timeline() {
               role="button"
               tabIndex={0}
               data-screenshot-target="timeline-keyframes"
-              className={`rounded border border-white/5 relative flex items-center transition-all duration-200 cursor-pointer ${expandedKeyframeLane === 'global' ? 'ring-1 ring-cyan-400/50 z-10' : ''}`}
-              style={{ minHeight: expandedKeyframeLane === 'global' ? KEYFRAME_LANE_HEIGHT_EXPANDED : KEYFRAME_LANE_HEIGHT_COLLAPSED }}
+              className={`rounded border border-white/5 relative flex flex-col transition-all duration-200 cursor-pointer overflow-hidden ${expandedKeyframeLane === 'global' ? 'ring-1 ring-cyan-400/50 z-10' : ''}`}
+              style={{ minHeight: expandedKeyframeLane === 'global' ? globalKeyframeExpandedHeight : KEYFRAME_LANE_HEIGHT_COLLAPSED }}
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest('[data-keyframe-marker]')) return
                 e.stopPropagation()
@@ -709,42 +742,122 @@ export function Timeline() {
               title={expandedKeyframeLane === 'global' ? 'Global effect keyframes — click lane to collapse; drag markers to move' : 'Global effect keyframes — click to expand; drag markers to move time'}
             >
               <div className="absolute inset-0 bg-zinc-900/70 rounded pointer-events-none" aria-hidden />
-              {globalKeyframeMarkers.map(({ time, type }, idx) => {
-                const track = project.globalEffects?.[type]
-                const kfIndex = track?.keyframes.findIndex((k) => Math.abs(k.time - time) < KEYFRAME_DRAG_TIME_EPS) ?? -1
-                const isSelected =
-                  selectedKeyframe?.kind === 'global' &&
-                  selectedKeyframe.effectType === type &&
-                  Math.abs(selectedKeyframe.time - time) < KEYFRAME_DRAG_TIME_EPS
-                return (
-                  <button
-                    key={`${type}-${time}-${idx}`}
-                    type="button"
-                    data-keyframe-marker
-                    className={`absolute w-2 h-2 rounded-full -translate-x-1/2 cursor-grab active:cursor-grabbing z-10 border ${isSelected
-                        ? 'bg-cyan-400 ring-2 ring-white scale-125'
-                        : 'bg-cyan-500/90 hover:bg-cyan-400 hover:scale-125 border-white/30'
-                      }`}
-                    style={{ left: `${(time / totalDuration) * 100}%` }}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      if (kfIndex < 0) return
-                      const rect = keyframeTrackRef.current?.getBoundingClientRect()
-                      if (rect) setKeyframeDrag({ kind: 'global', effectType: type, keyframeTime: time, initialTime: time, trackRect: rect })
-                    }}
-                    onDoubleClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      if (kfIndex >= 0) {
-                        removeGlobalEffectKeyframe(type, kfIndex)
-                        if (isSelected) setSelectedKeyframe(null)
-                      }
-                    }}
-                    title={`${globalEffectLabel[type]} @ ${formatTime(time)} — click to select & seek, drag to move, double-click to remove`}
-                  />
-                )
-              })}
+              {expandedKeyframeLane === 'global' ? (
+                globalKeyframeLanes.map(({ effectType, paramKey, paramLabel }) => {
+                  const effectLabel = GLOBAL_EFFECT_LABELS[effectType]
+                  const laneLabel = paramKey ? `${effectLabel} · ${paramLabel}` : effectLabel
+                  const markers = globalKeyframeMarkers.filter((m) => {
+                    if (m.type !== effectType) return false
+                    if (!paramKey) return true
+                    const kf = project.globalEffects?.[effectType]?.keyframes.find(
+                      (k) => Math.abs(k.time - m.time) < KEYFRAME_DRAG_TIME_EPS
+                    )
+                    return kf ? paramKey in (kf as unknown as Record<string, unknown>) : false
+                  })
+                  return (
+                    <div
+                      key={`${effectType}-${paramKey}`}
+                      className="relative flex items-center shrink-0 border-b border-white/5 last:border-b-0"
+                      style={{ height: KEYFRAME_PARAM_ROW_HEIGHT }}
+                    >
+                      <span className="text-[10px] text-white/50 uppercase tracking-wider px-2 shrink-0 w-28 truncate" title={laneLabel}>
+                        {laneLabel}
+                      </span>
+                      <div
+                        ref={keyframeTrackRef}
+                        className="relative flex-1 min-w-0 h-full"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {markers.map(({ time }, idx) => {
+                          const track = project.globalEffects?.[effectType]
+                          const kfIndex = track?.keyframes.findIndex((k) => Math.abs(k.time - time) < KEYFRAME_DRAG_TIME_EPS) ?? -1
+                          const isSelected =
+                            selectedKeyframe?.kind === 'global' &&
+                            selectedKeyframe.effectType === effectType &&
+                            Math.abs(selectedKeyframe.time - time) < KEYFRAME_DRAG_TIME_EPS
+                          return (
+                            <button
+                              key={`${effectType}-${time}-${idx}`}
+                              type="button"
+                              data-keyframe-marker
+                              className={`absolute top-1/2 w-2 h-2 -translate-x-1/2 -translate-y-1/2 rounded-full cursor-grab active:cursor-grabbing z-10 border ${isSelected
+                                  ? 'bg-cyan-400 ring-2 ring-white scale-125'
+                                  : 'bg-cyan-500/90 hover:bg-cyan-400 hover:scale-125 border-white/30'
+                                }`}
+                              style={{ left: `${(time / totalDuration) * 100}%` }}
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                if (kfIndex < 0) return
+                                const rect = keyframeTrackRef.current?.getBoundingClientRect()
+                                if (rect) setKeyframeDrag({ kind: 'global', effectType, keyframeTime: time, initialTime: time, trackRect: rect })
+                              }}
+                              onDoubleClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                if (kfIndex >= 0) {
+                                  removeGlobalEffectKeyframe(effectType, kfIndex)
+                                  if (isSelected) setSelectedKeyframe(null)
+                                }
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedKeyframe({ kind: 'global', effectType, time })
+                                setCurrentTime(time)
+                              }}
+                              title={`${laneLabel} @ ${formatTime(time)} — click to select & seek, drag to move, double-click to remove`}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div ref={keyframeTrackRef} className="relative flex-1 min-w-0 h-full min-h-[24px]">
+                  {globalKeyframeMarkers.map(({ time, type }, idx) => {
+                    const track = project.globalEffects?.[type]
+                    const kfIndex = track?.keyframes.findIndex((k) => Math.abs(k.time - time) < KEYFRAME_DRAG_TIME_EPS) ?? -1
+                    const isSelected =
+                      selectedKeyframe?.kind === 'global' &&
+                      selectedKeyframe.effectType === type &&
+                      Math.abs(selectedKeyframe.time - time) < KEYFRAME_DRAG_TIME_EPS
+                    return (
+                      <button
+                        key={`${type}-${time}-${idx}`}
+                        type="button"
+                        data-keyframe-marker
+                        className={`absolute w-2 h-2 rounded-full -translate-x-1/2 cursor-grab active:cursor-grabbing z-10 border top-1/2 -translate-y-1/2 ${isSelected
+                            ? 'bg-cyan-400 ring-2 ring-white scale-125'
+                            : 'bg-cyan-500/90 hover:bg-cyan-400 hover:scale-125 border-white/30'
+                          }`}
+                        style={{ left: `${(time / totalDuration) * 100}%` }}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          if (kfIndex < 0) return
+                          const rect = keyframeTrackRef.current?.getBoundingClientRect()
+                          if (rect) setKeyframeDrag({ kind: 'global', effectType: type, keyframeTime: time, initialTime: time, trackRect: rect })
+                        }}
+                        onDoubleClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          if (kfIndex >= 0) {
+                            removeGlobalEffectKeyframe(type, kfIndex)
+                            if (isSelected) setSelectedKeyframe(null)
+                          }
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedKeyframe({ kind: 'global', effectType: type, time })
+                          setCurrentTime(time)
+                        }}
+                        title={`${GLOBAL_EFFECT_LABELS[type]} @ ${formatTime(time)} — click to select & seek, drag to move, double-click to remove`}
+                      />
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 

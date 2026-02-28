@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '@/store'
 import { useFloatingPanels } from '@/hooks/useFloatingPanels'
@@ -11,8 +11,10 @@ import { PanelRow } from './PanelRow'
 import {
   GlobalEffectsPanel,
   GLOBAL_EFFECT_TYPES,
+  CAMERA_DISTORTION_TYPES,
   getSceneEffectStateAtTime,
 } from './GlobalEffectsPanel'
+import { CameraDistortionPanel } from './CameraDistortionPanel'
 import type { GlobalEffectType } from '@/types'
 
 const PANEL_TITLES: Record<string, string> = {
@@ -21,6 +23,7 @@ const PANEL_TITLES: Record<string, string> = {
 
 const PANEL_ORDER: string[] = [
   ...GLOBAL_EFFECT_TYPES,
+  'camera-distortion',
   'camera-flyover',
 ]
 
@@ -29,6 +32,8 @@ export function RightSidebar() {
   const scene = useStore((s) => s.project.scenes[currentSceneIndex])
   const project = useStore((s) => s.project)
   const setProjectDither = useStore((s) => s.setProjectDither)
+
+  const [selectedDistortionType, setSelectedDistortionType] = useState<GlobalEffectType>('swirl')
 
   const {
     openPanels,
@@ -66,7 +71,7 @@ export function RightSidebar() {
       return true
     }
     return Object.fromEntries(
-      GLOBAL_EFFECT_TYPES.map((t) => [t, computeEnabled(t)])
+      [...GLOBAL_EFFECT_TYPES, ...CAMERA_DISTORTION_TYPES].map((t) => [t, computeEnabled(t)])
     ) as Record<GlobalEffectType, boolean>
   }, [project, currentTime, dither.enabled, scene, sceneLocalTime, sceneDuration])
 
@@ -101,6 +106,12 @@ export function RightSidebar() {
           dataScreenshotOpen={effectType === 'dof' ? 'dof' : undefined}
         />
       ))}
+      <PanelRow
+        title="Camera Distortion"
+        enabled={effectEnabledMap[selectedDistortionType] ?? false}
+        onToggleEnabled={() => handleEffectToggle(selectedDistortionType)}
+        onClick={() => togglePanel('camera-distortion')}
+      />
 
       {!scene ? (
         <div className="flex flex-col items-center justify-center py-6 px-2 text-white/40 text-sm text-center">
@@ -140,6 +151,27 @@ export function RightSidebar() {
                 </DraggableEffectWindow>
               ) : null
             )}
+            {openPanels.has('camera-distortion') && (() => {
+              const key = 'camera-distortion'
+              const pos = panelPositions[key] ?? positionByKey[key] ?? { x: 320, y: 60 }
+              return (
+                <DraggableEffectWindow
+                  key={key}
+                  id="panel-camera-distortion"
+                  title="Camera Distortion"
+                  defaultX={pos.x}
+                  defaultY={pos.y}
+                  width={320}
+                  onPositionChange={(x, y) => setPanelPosition(key, x, y)}
+                  onClose={() => closePanel(key)}
+                >
+                  <CameraDistortionPanel
+                    selectedType={selectedDistortionType}
+                    onTypeChange={setSelectedDistortionType}
+                  />
+                </DraggableEffectWindow>
+              )
+            })()}
             {openPanels.has('camera-flyover') && scene?.flyover && (() => {
               const key = 'camera-flyover'
               const pos = panelPositions[key] ?? positionByKey[key] ?? { x: 380, y: 120 }
