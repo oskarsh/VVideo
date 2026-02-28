@@ -23,6 +23,7 @@ export const EFFECT_DISPLAY_NAMES: Record<string, string> = {
   pixelShatter: 'Pixel shatter',
   tunnel: 'Tunnel',
   noiseWarp: 'Noise warp',
+  pixelSort: 'Pixel sort',
 }
 
 /** Labels for global effect types only (typed). Use EFFECT_DISPLAY_NAMES when you need scene + global. */
@@ -97,5 +98,9 @@ export const GLOBAL_EFFECT_PARAM_LABELS: Record<GlobalEffectType, Array<{ key: s
   noiseWarp: [
     { key: 'strength', label: 'Strength' },
     { key: 'scale', label: 'Scale' },
+  ],
+  pixelSort: [
+    { key: 'threshold', label: 'Threshold' },
+    { key: 'span', label: 'Span' },
   ],
 }

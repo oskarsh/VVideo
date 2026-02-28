@@ -14,8 +14,9 @@ import {
 import { GlitchMode } from 'postprocessing'
 import * as THREE from 'three'
 import { useStore } from '@/store'
-import { setFlyoverEditCamera } from '@/flyoverCameraRef'
+import { setFlyoverEditCamera, getFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyKeys, setFlyKey, isFlyKey } from '@/flyKeys'
+import { useGamepad } from '@/useGamepad'
 import { applyFlyoverEasing } from '@/easing'
 import { getFlyoverKeyframes } from '@/lib/flyover'
 import { DitherEffect } from '@/effects/DitherEffect'
@@ -32,6 +33,7 @@ import { FisheyeEffect } from '@/effects/FisheyeEffect'
 import { PixelShatterEffect } from '@/effects/PixelShatterEffect'
 import { TunnelEffect } from '@/effects/TunnelEffect'
 import { NoiseWarpEffect } from '@/effects/NoiseWarpEffect'
+import { PixelSortEffect } from '@/effects/PixelSortEffect'
 import type {
   Scene as SceneType,
   SceneEffectZoom,
@@ -54,6 +56,7 @@ import type {
   SceneEffectPixelShatter,
   SceneEffectTunnel,
   SceneEffectNoiseWarp,
+  SceneEffectPixelSort,
   SceneText,
   Pane,
   BackgroundTexture,
@@ -939,6 +942,135 @@ function WASDFly() {
   return null
 }
 
+const GAMEPAD_DEAD = 0.12
+const KEYFRAME_SNAP = 0.008
+
+function GamepadFly() {
+  const { camera } = useThree()
+  const prevXBtn = useRef(false)
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const project = useStore((s) => s.project)
+  const currentTime = useStore((s) => s.currentTime)
+  const addFlyoverKeyframe = useStore((s) => s.addFlyoverKeyframe)
+  const updateFlyoverKeyframe = useStore((s) => s.updateFlyoverKeyframe)
+
+  useFrame((_, delta) => {
+    const gp = Array.from(navigator.getGamepads()).find(Boolean)
+    if (!gp) return
+    if (!camera || !('fov' in camera)) return
+
+    const dt = Number.isFinite(delta) && delta > 0 && delta < 1 ? delta : 1 / 60
+    const dead = (v: number) => (Math.abs(v) < GAMEPAD_DEAD ? 0 : v)
+
+    // Analog movement: axis magnitude scales speed — slight push ≈ shift-slow, full push = full speed
+    const lx = dead(gp.axes[0] ?? 0)
+    const ly = dead(gp.axes[1] ?? 0)
+    if (lx !== 0 || ly !== 0) {
+      camera.getWorldDirection(_forward)
+      const m = camera.matrix.elements
+      _right.set(m[0], m[1], m[2])
+      camera.position.addScaledVector(_forward, -ly * FLY_SPEED * dt)
+      camera.position.addScaledVector(_right, lx * FLY_SPEED * dt)
+    }
+
+    // L2/R2: analog ascend/descend
+    const trigDown = gp.buttons[6]?.value ?? 0
+    const trigUp = gp.buttons[7]?.value ?? 0
+    if (trigDown > 0.05 || trigUp > 0.05) {
+      camera.position.y += (trigUp - trigDown) * FLY_SPEED * dt
+    }
+
+    // Analog rotation: axis magnitude scales rotation speed
+    const rx = dead(gp.axes[2] ?? 0)
+    const ry = dead(gp.axes[3] ?? 0)
+    if (rx !== 0 || ry !== 0) {
+      camera.rotation.y -= rx * ROTATE_SPEED * dt
+      camera.rotation.x -= ry * ROTATE_SPEED * dt
+    }
+
+    // X button (index 0): set/update flyover keyframe at current playhead
+    const xPressed = gp.buttons[0]?.pressed ?? false
+    if (xPressed && !prevXBtn.current) {
+      const cam = getFlyoverEditCamera()
+      const scene = project.scenes[currentSceneIndex]
+      if (cam && scene) {
+        const sceneStart = project.scenes
+          .slice(0, currentSceneIndex)
+          .reduce((a, s) => a + s.durationSeconds, 0)
+        const normalizedTime = scene.durationSeconds > 0
+          ? Math.max(0, Math.min(1, (currentTime - sceneStart) / scene.durationSeconds))
+          : 0
+        const keyframes = getFlyoverKeyframes(scene)
+        const existingIdx = keyframes.findIndex((kf) => Math.abs(kf.time - normalizedTime) < KEYFRAME_SNAP)
+        if (existingIdx >= 0) {
+          updateFlyoverKeyframe(currentSceneIndex, existingIdx, {
+            position: [...cam.position] as [number, number, number],
+            rotation: [...cam.rotation] as [number, number, number],
+            fov: cam.fov,
+          })
+        } else {
+          addFlyoverKeyframe(currentSceneIndex, {
+            time: normalizedTime,
+            position: [...cam.position] as [number, number, number],
+            rotation: [...cam.rotation] as [number, number, number],
+            fov: cam.fov,
+          })
+        }
+      }
+    }
+    prevXBtn.current = xPressed
+  })
+
+  return null
+}
+
+/** R1 = jump to end of scene (if already at end + next scene exists → advance); L1 = jump to start. */
+function GamepadNav() {
+  const project = useStore((s) => s.project)
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const currentTime = useStore((s) => s.currentTime)
+  const setCurrentTime = useStore((s) => s.setCurrentTime)
+  const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
+  const setPlaying = useStore((s) => s.setPlaying)
+  const prevL1 = useRef(false)
+  const prevR1 = useRef(false)
+
+  useFrame(() => {
+    const gp = Array.from(navigator.getGamepads()).find(Boolean)
+    if (!gp) return
+
+    const scenes = project.scenes
+    const scene = scenes[currentSceneIndex]
+    if (!scene) return
+    const sceneStart = scenes.slice(0, currentSceneIndex).reduce((a, s) => a + s.durationSeconds, 0)
+    const sceneEnd = sceneStart + scene.durationSeconds
+
+    // L1 (buttons[4]): jump to start of current scene
+    const l1 = gp.buttons[4]?.pressed ?? false
+    if (l1 && !prevL1.current) {
+      setCurrentTime(sceneStart)
+      setPlaying(false)
+    }
+    prevL1.current = l1
+
+    // R1 (buttons[5]): jump to end; if already at end and a next scene exists, advance to it
+    const r1 = gp.buttons[5]?.pressed ?? false
+    if (r1 && !prevR1.current) {
+      const atEnd = Math.abs(currentTime - sceneEnd) < 0.05
+      if (atEnd && currentSceneIndex < scenes.length - 1) {
+        setCurrentSceneIndex(currentSceneIndex + 1)
+        setCurrentTime(sceneEnd)
+      } else {
+        setCurrentTime(sceneEnd)
+      }
+      setPlaying(false)
+    }
+    prevR1.current = r1
+  })
+
+  return null
+}
+
 function ExportClearAlpha() {
   const { gl } = useThree()
   useEffect(() => {
@@ -1026,6 +1158,7 @@ function SceneContent() {
   const globalPixelShatter = getGlobalEffectStateAtTime(project, 'pixelShatter', currentTime)
   const globalTunnel = getGlobalEffectStateAtTime(project, 'tunnel', currentTime)
   const globalNoiseWarp = getGlobalEffectStateAtTime(project, 'noiseWarp', currentTime)
+  const globalPixelSort = getGlobalEffectStateAtTime(project, 'pixelSort', currentTime)
 
   const grainEffect = scene.effects.find((e): e is SceneEffectGrain => e.type === 'grain')
   const grainStart = grainEffect?.startOpacity ?? (grainEffect as { opacity?: number })?.opacity ?? 0.1
@@ -1256,6 +1389,13 @@ function SceneContent() {
   const noiseWarpScale = globalNoiseWarp != null ? (globalNoiseWarp.scaleStart as number) : lerp(noiseWarpEffect?.scaleStart ?? 5, noiseWarpEffect?.scaleEnd ?? 5)
   const noiseWarpSpeed = globalNoiseWarp != null ? (globalNoiseWarp.speedStart as number) : lerp(noiseWarpEffect?.speedStart ?? 1, noiseWarpEffect?.speedEnd ?? 1)
 
+  // --- Pixel Sort ---
+  const pixelSortEffect = scene.effects.find((e): e is SceneEffectPixelSort => e.type === 'pixelSort')
+  const pixelSortEnabled = globalPixelSort != null ? (globalPixelSort.enabled as boolean) : (pixelSortEffect?.enabled ?? false)
+  const pixelSortThreshold = globalPixelSort != null ? (globalPixelSort.thresholdStart as number) : lerp(pixelSortEffect?.thresholdStart ?? 0.3, pixelSortEffect?.thresholdEnd ?? 0.3)
+  const pixelSortSpan = globalPixelSort != null ? (globalPixelSort.spanStart as number) : lerp(pixelSortEffect?.spanStart ?? 0.15, pixelSortEffect?.spanEnd ?? 0.15)
+  const pixelSortAxis = ((globalPixelSort?.axis as string) ?? pixelSortEffect?.axis) === 'vertical' ? 1.0 : 0.0
+
   return (
     <>
       <CameraRig
@@ -1289,10 +1429,12 @@ function SceneContent() {
       {editControlsActive && (
         <>
           <FlyoverEditSync />
+          <GamepadFly />
           <WASDFly />
           <OrbitKeyboardSync controlsRef={orbitControlsRef} />
         </>
       )}
+      <GamepadNav />
       {!hideBackground && (
         <ProfiledSection id="background">
           {project.backgroundVideoUrl ? (
@@ -1477,6 +1619,13 @@ function SceneContent() {
             speed={noiseWarpSpeed}
           />
         ) : (<></>)}
+        {pixelSortEnabled ? (
+          <PixelSortEffect
+            threshold={pixelSortThreshold}
+            span={pixelSortSpan}
+            axis={pixelSortAxis}
+          />
+        ) : (<></>)}
         {useLibraryGlitch ? (
           <Glitch
             active={glitchEnabled}
@@ -1552,6 +1701,7 @@ export function EditorCanvas() {
   const isExporting = useStore((s) => s.isExporting)
   const exportRenderMode = useStore((s) => s.exportRenderMode)
   const exportHeight = useStore((s) => s.exportHeight)
+  const gamepadConnected = useGamepad()
   const aspect = w / h
   const height = isExporting ? exportHeight : 480
   const width = Math.round(height * aspect)
@@ -1559,7 +1709,7 @@ export function EditorCanvas() {
 
   return (
     <div
-      className="rounded-lg overflow-hidden bg-black"
+      className="relative rounded-lg overflow-hidden bg-black"
       style={{ width, height }}
     >
       <Canvas
@@ -1576,6 +1726,35 @@ export function EditorCanvas() {
           <SceneContent />
         </Suspense>
       </Canvas>
+      {gamepadConnected && (
+        <div
+          className="absolute bottom-2 right-2 flex items-center gap-1.5 pointer-events-none select-none"
+          title="Gamepad connected — use left stick to move, right stick to look, L2/R2 to descend/ascend"
+        >
+          <span className="text-[10px] text-white/50 font-mono uppercase tracking-wide">controller</span>
+          <svg
+            viewBox="0 0 24 16"
+            fill="currentColor"
+            width="22"
+            height="15"
+            className="text-white/60"
+          >
+            {/* body */}
+            <path d="M6 0C2.69 0 0 2.69 0 6v4c0 1.66 1.34 3 3 3h1.5l1.5-3h12l1.5 3H21c1.66 0 3-1.34 3-3V6c0-3.31-2.69-6-6-6H6z" opacity="0.9" />
+            {/* d-pad left stem */}
+            <rect x="3" y="5.5" width="2" height="3" rx="0.5" fill="white" opacity="0.7" />
+            {/* d-pad right stem */}
+            <rect x="7" y="5.5" width="2" height="3" rx="0.5" fill="white" opacity="0.7" />
+            {/* d-pad vertical stem */}
+            <rect x="4.5" y="4" width="3" height="6" rx="0.5" fill="white" opacity="0.7" />
+            {/* face buttons */}
+            <circle cx="18.5" cy="5" r="1" fill="white" opacity="0.55" />
+            <circle cx="21" cy="7" r="1" fill="white" opacity="0.55" />
+            <circle cx="16" cy="7" r="1" fill="white" opacity="0.55" />
+            <circle cx="18.5" cy="9" r="1" fill="white" opacity="0.55" />
+          </svg>
+        </div>
+      )}
     </div>
   )
 }

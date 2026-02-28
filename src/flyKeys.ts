@@ -30,3 +30,4 @@ export function setFlyKey(code: string, down: boolean): void {
 export function isFlyKey(code: string): boolean {
   return code in KEY_MAP
 }
+

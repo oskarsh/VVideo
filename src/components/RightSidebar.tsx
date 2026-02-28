@@ -1,13 +1,10 @@
 import { useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore } from '@/store'
-import { useFloatingPanels } from '@/hooks/useFloatingPanels'
 import { DEFAULT_DITHER } from '@/types'
 import { getGlobalEffectStateAtTime } from '@/lib/globalEffects'
 import { GLOBAL_EFFECT_LABELS } from '@/lib/effectLabels'
-import { DraggableEffectWindow } from './DraggableEffectWindow'
 import { FlyoverPanel } from './FlyoverPanel'
-import { PanelRow } from './PanelRow'
 import {
   GlobalEffectsPanel,
   GLOBAL_EFFECT_TYPES,
@@ -17,16 +14,6 @@ import {
 import { CameraDistortionPanel } from './CameraDistortionPanel'
 import type { GlobalEffectType } from '@/types'
 
-const PANEL_TITLES: Record<string, string> = {
-  'camera-flyover': 'Bezier',
-}
-
-const PANEL_ORDER: string[] = [
-  ...GLOBAL_EFFECT_TYPES,
-  'camera-distortion',
-  'camera-flyover',
-]
-
 export function RightSidebar() {
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const scene = useStore((s) => s.project.scenes[currentSceneIndex])
@@ -34,15 +21,7 @@ export function RightSidebar() {
   const setProjectDither = useStore((s) => s.setProjectDither)
 
   const [selectedDistortionType, setSelectedDistortionType] = useState<GlobalEffectType>('swirl')
-
-  const {
-    openPanels,
-    panelPositions,
-    togglePanel,
-    closePanel,
-    setPanelPosition,
-    positionByKey,
-  } = useFloatingPanels(PANEL_ORDER, { panelWidth: 340 })
+  const [flyoverOpen, setFlyoverOpen] = useState(true)
 
   const dither = project.dither ?? DEFAULT_DITHER
   const hasFlyover = Boolean(scene?.flyover)
@@ -94,103 +73,124 @@ export function RightSidebar() {
   }
 
   return (
-    <div className="p-2 lg:p-3 space-y-0">
-      {/* Global effect rows — each opens floating window; on/off toggles effect only (keyframes added via panel sliders) */}
-      {GLOBAL_EFFECT_TYPES.map((effectType) => (
-        <PanelRow
-          key={effectType}
-          title={GLOBAL_EFFECT_LABELS[effectType]}
-          enabled={getEffectEnabled(effectType)}
-          onToggleEnabled={() => handleEffectToggle(effectType)}
-          onClick={() => togglePanel(effectType)}
-          dataScreenshotOpen={effectType === 'dof' ? 'dof' : undefined}
-        />
-      ))}
-      <PanelRow
+    <div className="space-y-0">
+      {GLOBAL_EFFECT_TYPES.map((effectType) => {
+        const enabled = getEffectEnabled(effectType)
+        return (
+          <EffectSection
+            key={effectType}
+            title={GLOBAL_EFFECT_LABELS[effectType]}
+            enabled={enabled}
+            onToggle={() => handleEffectToggle(effectType)}
+          >
+            <GlobalEffectsPanel singleEffectType={effectType} />
+          </EffectSection>
+        )
+      })}
+
+      <EffectSection
         title="Camera Distortion"
         enabled={effectEnabledMap[selectedDistortionType] ?? false}
-        onToggleEnabled={() => handleEffectToggle(selectedDistortionType)}
-        onClick={() => togglePanel('camera-distortion')}
-      />
+        onToggle={() => handleEffectToggle(selectedDistortionType)}
+      >
+        <CameraDistortionPanel
+          selectedType={selectedDistortionType}
+          onTypeChange={setSelectedDistortionType}
+        />
+      </EffectSection>
 
-      {!scene ? (
+      {scene && hasFlyover && (
+        <div className="border-b border-white/10 last:border-b-0">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setFlyoverOpen((v) => !v)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setFlyoverOpen((v) => !v)
+              }
+            }}
+            className="flex cursor-pointer items-center gap-2 py-2 hover:bg-white/5"
+          >
+            <span className="flex-1 text-left text-xs font-semibold uppercase tracking-wider text-white/70">
+              Bezier
+            </span>
+            {flyoverOpen ? (
+              <ChevronDown className="w-3.5 h-3.5 text-white/40 shrink-0" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5 text-white/40 shrink-0" />
+            )}
+          </div>
+          {flyoverOpen && (
+            <div className="pb-3 px-1">
+              <FlyoverPanel />
+            </div>
+          )}
+        </div>
+      )}
+
+      {!scene && (
         <div className="flex flex-col items-center justify-center py-6 px-2 text-white/40 text-sm text-center">
           Select a scene in the timeline to edit
         </div>
-      ) : (
-        <>
-          {hasFlyover && (
-            <PanelRow
-              title={PANEL_TITLES['camera-flyover']}
-              enabled={true}
-              toggleDisabled
-              onClick={() => togglePanel('camera-flyover')}
-            />
-          )}
-        </>
       )}
+    </div>
+  )
+}
 
-      {/* Floating panels */}
-      {typeof document !== 'undefined' &&
-        createPortal(
-          <>
-            {GLOBAL_EFFECT_TYPES.map((effectType) =>
-              openPanels.has(effectType) ? (
-                <DraggableEffectWindow
-                  key={effectType}
-                  id={`panel-${effectType}`}
-                  title={GLOBAL_EFFECT_LABELS[effectType]}
-                  defaultX={(panelPositions[effectType] ?? positionByKey[effectType] ?? { x: 320, y: 60 }).x}
-                  defaultY={(panelPositions[effectType] ?? positionByKey[effectType] ?? { x: 320, y: 60 }).y}
-                  width={320}
-                  onPositionChange={(x, y) => setPanelPosition(effectType, x, y)}
-                  onClose={() => closePanel(effectType)}
-                  dataScreenshotTarget={effectType === 'dof' ? 'dof-panel' : undefined}
-                >
-                  <GlobalEffectsPanel singleEffectType={effectType} />
-                </DraggableEffectWindow>
-              ) : null
-            )}
-            {openPanels.has('camera-distortion') && (() => {
-              const key = 'camera-distortion'
-              const pos = panelPositions[key] ?? positionByKey[key] ?? { x: 320, y: 60 }
-              return (
-                <DraggableEffectWindow
-                  key={key}
-                  id="panel-camera-distortion"
-                  title="Camera Distortion"
-                  defaultX={pos.x}
-                  defaultY={pos.y}
-                  width={320}
-                  onPositionChange={(x, y) => setPanelPosition(key, x, y)}
-                  onClose={() => closePanel(key)}
-                >
-                  <CameraDistortionPanel
-                    selectedType={selectedDistortionType}
-                    onTypeChange={setSelectedDistortionType}
-                  />
-                </DraggableEffectWindow>
-              )
-            })()}
-            {openPanels.has('camera-flyover') && scene?.flyover && (() => {
-              const key = 'camera-flyover'
-              const pos = panelPositions[key] ?? positionByKey[key] ?? { x: 380, y: 120 }
-              return (
-                <DraggableEffectWindow
-                  id="panel-camera-flyover"
-                  title={PANEL_TITLES['camera-flyover']}
-                  defaultX={pos.x}
-                  defaultY={pos.y}
-                  onPositionChange={(x, y) => setPanelPosition(key, x, y)}
-                  onClose={() => closePanel('camera-flyover')}
-                >
-                  <FlyoverPanel />
-                </DraggableEffectWindow>
-              )
-            })()}
-          </>,
-          document.body
+function EffectSection({
+  title,
+  enabled,
+  onToggle,
+  children,
+}: {
+  title: string
+  enabled: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="border-b border-white/10 last:border-b-0">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
+        className="flex cursor-pointer items-center gap-2 py-2 hover:bg-white/5"
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggle()
+          }}
+          className={`flex h-5 w-9 shrink-0 items-center rounded border transition-colors ${
+            enabled ? 'border-emerald-500/50 bg-emerald-500/30' : 'border-white/20 bg-white/5'
+          }`}
+          aria-label={enabled ? 'Turn off' : 'Turn on'}
+        >
+          <span
+            className={`block h-3 w-3 rounded-full transition-all ${
+              enabled ? 'translate-x-1 bg-emerald-400' : 'translate-x-[20px] bg-white/30'
+            }`}
+          />
+        </button>
+        <span className="flex-1 text-left text-xs font-semibold uppercase tracking-wider text-white/70">
+          {title}
+        </span>
+        {enabled ? (
+          <ChevronDown className="w-3.5 h-3.5 text-white/40 shrink-0" />
+        ) : (
+          <ChevronRight className="w-3.5 h-3.5 text-white/40 shrink-0" />
         )}
+      </div>
+      {enabled && <div className="pb-3 px-1">{children}</div>}
     </div>
   )
 }

@@ -35,6 +35,7 @@ export const CAMERA_DISTORTION_TYPES: GlobalEffectType[] = [
   'pixelShatter',
   'tunnel',
   'noiseWarp',
+  'pixelSort',
 ]
 
 /** Build effect state at time from scene (for "add keyframe" when no global track yet). */
@@ -185,6 +186,10 @@ export function getSceneEffectStateAtTime(
       const n = eff as { enabled?: boolean; strengthStart?: number; strengthEnd?: number; scaleStart?: number; scaleEnd?: number; speedStart?: number; speedEnd?: number }
       return { type: 'noiseWarp', enabled: n.enabled, strengthStart: lerp(n.strengthStart ?? 0.05, n.strengthEnd ?? 0.05), strengthEnd: lerp(n.strengthStart ?? 0.05, n.strengthEnd ?? 0.05), scaleStart: lerp(n.scaleStart ?? 5, n.scaleEnd ?? 5), scaleEnd: lerp(n.scaleStart ?? 5, n.scaleEnd ?? 5), speedStart: lerp(n.speedStart ?? 1, n.speedEnd ?? 1), speedEnd: lerp(n.speedStart ?? 1, n.speedEnd ?? 1) }
     }
+    case 'pixelSort': {
+      const ps = eff as { enabled?: boolean; thresholdStart?: number; thresholdEnd?: number; spanStart?: number; spanEnd?: number; axis?: string }
+      return { type: 'pixelSort', enabled: ps.enabled, thresholdStart: lerp(ps.thresholdStart ?? 0.3, ps.thresholdEnd ?? 0.3), thresholdEnd: lerp(ps.thresholdStart ?? 0.3, ps.thresholdEnd ?? 0.3), spanStart: lerp(ps.spanStart ?? 0.15, ps.spanEnd ?? 0.15), spanEnd: lerp(ps.spanStart ?? 0.15, ps.spanEnd ?? 0.15), axis: ps.axis ?? 'horizontal' }
+    }
     default:
       return null
   }
@@ -268,6 +273,8 @@ function getDefaultEffectState(effectType: GlobalEffectType): Record<string, unk
       return { strengthStart: kf.strength, strengthEnd: kf.strength, centerXStart: kf.centerX, centerXEnd: kf.centerX, centerYStart: kf.centerY, centerYEnd: kf.centerY }
     case 'noiseWarp':
       return { strengthStart: kf.strength, strengthEnd: kf.strength, scaleStart: kf.scale, scaleEnd: kf.scale, speedStart: kf.speed, speedEnd: kf.speed }
+    case 'pixelSort':
+      return { thresholdStart: kf.threshold, thresholdEnd: kf.threshold, spanStart: kf.span, spanEnd: kf.span, axis: 'horizontal' }
     default:
       return { ...kf }
   }
@@ -712,6 +719,15 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                   </div>
                 )
               }
+              if (effectType === 'pixelSort') {
+                const ps = displayState
+                return (
+                  <div className="space-y-2">
+                    <SliderWithKeyframe label="Threshold (luma cutoff)" paramKey="threshold" value={(ps.thresholdStart ?? 0.3) as number} min={0} max={1} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ thresholdStart: v, thresholdEnd: v }, { threshold: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Span (sort window)" paramKey="span" value={(ps.spanStart ?? 0.15) as number} min={0.01} max={0.5} step={0.01} format={(x) => x.toFixed(2)} onChange={(v) => onSliderChange({ spanStart: v, spanEnd: v }, { span: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                  </div>
+                )
+              }
               return null
             })()}
             {hasTrack && (
@@ -745,6 +761,7 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                         case 'pixelShatter': kfLabel = fmt(v.scale, (n) => `sc:${Math.round(n)}`) ?? ''; break
                         case 'tunnel': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(2)}`) ?? ''; break
                         case 'noiseWarp': kfLabel = fmt(v.strength, (n) => `str:${n.toFixed(3)}`) ?? ''; break
+                        case 'pixelSort': kfLabel = fmt(v.threshold, (n) => `thr:${n.toFixed(2)}`) ?? ''; break
                       }
                       return (
                         <div

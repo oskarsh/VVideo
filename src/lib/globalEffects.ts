@@ -28,6 +28,7 @@ import type {
   GlobalEffectKeyframePixelShatter,
   GlobalEffectKeyframeTunnel,
   GlobalEffectKeyframeNoiseWarp,
+  GlobalEffectKeyframePixelSort,
   GlitchAlgorithm,
 } from '@/types'
 
@@ -298,6 +299,16 @@ export function getGlobalEffectStateAtTime(
           speedStart: (p.speed ?? def.speed ?? 1.0) as number,
           speedEnd: (p.speed ?? def.speed ?? 1.0) as number,
         }
+      case 'pixelSort':
+        return {
+          type: 'pixelSort',
+          enabled,
+          thresholdStart: (p.threshold ?? def.threshold ?? 0.3) as number,
+          thresholdEnd: (p.threshold ?? def.threshold ?? 0.3) as number,
+          spanStart: (p.span ?? def.span ?? 0.15) as number,
+          spanEnd: (p.span ?? def.span ?? 0.15) as number,
+          axis: (p.axis ?? 'horizontal') as string,
+        }
       default:
         return null
     }
@@ -453,6 +464,11 @@ export function getGlobalEffectStateAtTime(
       const sp = sampleNum(kfs, time, 'speed', 1.0)
       return { type: 'noiseWarp', enabled, strengthStart: s, strengthEnd: s, scaleStart: sc, scaleEnd: sc, speedStart: sp, speedEnd: sp }
     }
+    case 'pixelSort': {
+      const thr = sampleNum(kfs, time, 'threshold', 0.3)
+      const sp = sampleNum(kfs, time, 'span', 0.15)
+      return { type: 'pixelSort', enabled, thresholdStart: thr, thresholdEnd: thr, spanStart: sp, spanEnd: sp, axis: 'horizontal' }
+    }
     default:
       return null
   }
@@ -513,6 +529,7 @@ export const DEFAULT_GLOBAL_KEYFRAMES: Record<GlobalEffectType, GlobalEffectKeyf
   pixelShatter: { time: 0, enabled: false, scale: 20.0, strength: 0.05 },
   tunnel: { time: 0, enabled: false, strength: 0.3, centerX: 0.5, centerY: 0.5 },
   noiseWarp: { time: 0, enabled: false, strength: 0.05, scale: 5.0, speed: 1.0 },
+  pixelSort: { time: 0, enabled: false, threshold: 0.3, span: 0.15 },
 }
 
 /** Create a keyframe at time `time` with same values as current state (from scene or defaults). */
@@ -679,6 +696,13 @@ export function createKeyframeAtTime(
         strength: (currentState.strengthStart ?? currentState.strengthEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.noiseWarp as GlobalEffectKeyframeNoiseWarp).strength) as number,
         scale: (currentState.scaleStart ?? currentState.scaleEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.noiseWarp as GlobalEffectKeyframeNoiseWarp).scale) as number,
         speed: (currentState.speedStart ?? currentState.speedEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.noiseWarp as GlobalEffectKeyframeNoiseWarp).speed) as number,
+      }
+    case 'pixelSort':
+      return {
+        time,
+        enabled: (currentState.enabled ?? def.enabled) as boolean,
+        threshold: (currentState.thresholdStart ?? currentState.thresholdEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.pixelSort as GlobalEffectKeyframePixelSort).threshold) as number,
+        span: (currentState.spanStart ?? currentState.spanEnd ?? (DEFAULT_GLOBAL_KEYFRAMES.pixelSort as GlobalEffectKeyframePixelSort).span) as number,
       }
     default:
       return { ...def, time } as GlobalEffectKeyframe

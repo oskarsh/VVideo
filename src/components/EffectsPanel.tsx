@@ -1,9 +1,5 @@
 import { useStore } from '@/store'
-import { useMemo } from 'react'
-import { createPortal } from 'react-dom'
-import { useFloatingPanels } from '@/hooks/useFloatingPanels'
-import { DraggableEffectWindow } from './DraggableEffectWindow'
-import { PanelRow } from './PanelRow'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import type {
   SceneEffectZoom,
   SceneEffectGrain,
@@ -25,6 +21,7 @@ import type {
   SceneEffectPixelShatter,
   SceneEffectTunnel,
   SceneEffectNoiseWarp,
+  SceneEffectPixelSort,
   SceneEffect,
   GlitchAlgorithm,
   ChromaticDirection,
@@ -33,99 +30,73 @@ import { EFFECT_DISPLAY_NAMES } from '@/lib/effectLabels'
 import { inputClass } from '@/constants/ui'
 import { DITHER_MODES } from '@/constants/effects'
 
-function effectKey(sceneIndex: number, effectIndex: number) {
-  return `${sceneIndex}-${effectIndex}`
-}
-
 export function EffectsPanel() {
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const scene = useStore((s) => s.project.scenes[currentSceneIndex])
   const setEffect = useStore((s) => s.setEffect)
 
-  const allPanelKeys = useMemo(
-    () =>
-      scene
-        ? scene.effects.map((_, i) => effectKey(currentSceneIndex, i))
-        : [],
-    [scene, currentSceneIndex]
-  )
-  const {
-    openPanels,
-    panelPositions,
-    togglePanel,
-    closePanel,
-    setPanelPosition,
-    positionByKey,
-  } = useFloatingPanels(allPanelKeys)
-
   if (!scene) return null
 
   return (
-    <>
-      <div className="space-y-0">
-        {scene.effects.map((eff, i) => {
-          const key = effectKey(currentSceneIndex, i)
-          const enabled =
-            'enabled' in eff
-              ? (eff as { enabled: boolean }).enabled
-              : (eff as SceneEffectZoom & { enabled?: boolean }).enabled !== false
-          const title = EFFECT_DISPLAY_NAMES[eff.type] ?? eff.type
+    <div className="space-y-0">
+      {scene.effects.map((eff, i) => {
+        const enabled =
+          'enabled' in eff
+            ? (eff as { enabled: boolean }).enabled
+            : (eff as SceneEffectZoom & { enabled?: boolean }).enabled !== false
+        const title = EFFECT_DISPLAY_NAMES[eff.type] ?? eff.type
+        const toggle = () =>
+          setEffect(currentSceneIndex, i, { enabled: !enabled })
+        const content = renderEffectContent(eff, currentSceneIndex, i, setEffect, true)
 
-          const handleToggleEnabled = (e: React.MouseEvent) => {
-            e.stopPropagation()
-            setEffect(currentSceneIndex, i, {
-              enabled: 'enabled' in eff ? !(eff as { enabled: boolean }).enabled : !enabled,
-            })
-          }
-
-          const handleRowClick = () => togglePanel(key)
-
-          return (
-            <PanelRow
-              key={i}
-              title={title}
-              enabled={enabled}
-              onToggleEnabled={handleToggleEnabled}
-              onClick={handleRowClick}
-            />
-          )
-        })}
-      </div>
-
-      {typeof document !== 'undefined' &&
-        createPortal(
-          <>
-            {scene.effects.map((eff, i) => {
-              const key = effectKey(currentSceneIndex, i)
-              if (!openPanels.has(key)) return null
-              const title = EFFECT_DISPLAY_NAMES[eff.type] ?? eff.type
-              const pos = panelPositions[key] ?? positionByKey[key] ?? { x: 320, y: 80 }
-              const content = renderEffectContent(
-                eff,
-                currentSceneIndex,
-                i,
-                setEffect,
-                true
-              )
-              if (!content) return null
-              return (
-                <DraggableEffectWindow
-                  key={key}
-                  id={`effect-panel-${key}`}
-                  title={title}
-                  defaultX={pos.x}
-                  defaultY={pos.y}
-                  onPositionChange={(x, y) => setPanelPosition(key, x, y)}
-                  onClose={() => closePanel(key)}
-                >
-                  {content}
-                </DraggableEffectWindow>
-              )
-            })}
-          </>,
-          document.body
-        )}
-    </>
+        return (
+          <div key={i} className="border-b border-white/10 last:border-b-0">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={toggle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggle()
+                }
+              }}
+              className="flex cursor-pointer items-center gap-2 py-2 hover:bg-white/5"
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggle()
+                }}
+                className={`flex h-5 w-9 shrink-0 items-center rounded border transition-colors ${
+                  enabled
+                    ? 'border-emerald-500/50 bg-emerald-500/30'
+                    : 'border-white/20 bg-white/5'
+                }`}
+                aria-label={enabled ? 'Turn off' : 'Turn on'}
+              >
+                <span
+                  className={`block h-3 w-3 rounded-full transition-all ${
+                    enabled ? 'translate-x-1 bg-emerald-400' : 'translate-x-[20px] bg-white/30'
+                  }`}
+                />
+              </button>
+              <span className="flex-1 text-left text-xs font-semibold uppercase tracking-wider text-white/70">
+                {title}
+              </span>
+              {content &&
+                (enabled ? (
+                  <ChevronDown className="w-3.5 h-3.5 text-white/40 shrink-0" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5 text-white/40 shrink-0" />
+                ))}
+            </div>
+            {enabled && content && <div className="pb-3 px-1">{content}</div>}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -369,6 +340,12 @@ function renderEffectContent(
     return (
       <div className="rounded bg-white/5 p-2">
         <NoiseWarpControls eff={eff as SceneEffectNoiseWarp} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
+      </div>
+    )
+  if (eff.type === 'pixelSort')
+    return (
+      <div className="rounded bg-white/5 p-2">
+        <PixelSortControls eff={eff as SceneEffectPixelSort} sceneIndex={sceneIndex} effectIndex={effectIndex} setEffect={setEffect} />
       </div>
     )
   return null
@@ -1295,6 +1272,38 @@ function NoiseWarpControls({ eff, sceneIndex, effectIndex, setEffect }: EffectCo
       <KeyframeSlider label="Speed" start={eff.speedStart} end={eff.speedEnd} min={0} max={5} step={0.1} format={(v) => v.toFixed(1)}
         onStart={(v) => setEffect(sceneIndex, effectIndex, { speedStart: v })}
         onEnd={(v) => setEffect(sceneIndex, effectIndex, { speedEnd: v })} />
+    </div>
+  )
+}
+
+function PixelSortControls({ eff, sceneIndex, effectIndex, setEffect }: EffectControlProps<SceneEffectPixelSort>) {
+  return (
+    <div className="space-y-3">
+      <KeyframeSlider label="Threshold (luma cutoff)" start={eff.thresholdStart} end={eff.thresholdEnd} min={0} max={1} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { thresholdStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { thresholdEnd: v })} />
+      <KeyframeSlider label="Span (sort window)" start={eff.spanStart} end={eff.spanEnd} min={0.01} max={0.5} step={0.01} format={(v) => v.toFixed(2)}
+        onStart={(v) => setEffect(sceneIndex, effectIndex, { spanStart: v })}
+        onEnd={(v) => setEffect(sceneIndex, effectIndex, { spanEnd: v })} />
+      <div className="space-y-1">
+        <span className="text-[11px] text-white/50">Axis</span>
+        <div className="flex gap-2">
+          {(['horizontal', 'vertical'] as const).map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => setEffect(sceneIndex, effectIndex, { axis: a })}
+              className={`flex-1 rounded px-2 py-1 text-[11px] transition-colors ${
+                eff.axis === a
+                  ? 'bg-white/20 text-white'
+                  : 'bg-white/5 text-white/40 hover:bg-white/10'
+              }`}
+            >
+              {a.charAt(0).toUpperCase() + a.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

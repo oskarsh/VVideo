@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Play, Pause, Repeat, SkipForward, SkipBack, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Play, Pause, Repeat, SkipForward, SkipBack, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react'
 import { useStore } from '@/store'
-import { DEFAULT_GLOBAL_KEYFRAMES } from '@/lib/globalEffects'
-import type { GlobalEffectKeyframeDither } from '@/types'
+import { DEFAULT_GLOBAL_KEYFRAMES, getGlobalEffectStateAtTime } from '@/lib/globalEffects'
+import type { GlobalEffectKeyframeDither, GlobalEffectKeyframe } from '@/types'
+import { getSceneEffectStateAtTime } from '@/components/GlobalEffectsPanel'
 import { useLayout } from '@/context/LayoutContext'
 import { EditorCanvas } from '@/components/EditorCanvas'
 import { Sidebar } from '@/components/Sidebar'
@@ -227,25 +228,57 @@ export default function App() {
   const welcome = useWelcome()
   const [aboutOpen, setAboutOpen] = useState(false)
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const projectIsSaved = useStore((s) => s.projectIsSaved)
+  const setProjectIsSaved = useStore((s) => s.setProjectIsSaved)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const setProjectBackgroundVideo = useStore((s) => s.setProjectBackgroundVideo)
   const setBackgroundTrim = useStore((s) => s.setBackgroundTrim)
   const addPaneWithMedia = useStore((s) => s.addPaneWithMedia)
+  const setProject = useStore((s) => s.setProject)
   const project = useStore((s) => s.project)
+
+  const hasContent =
+    !!project.backgroundVideoUrl ||
+    (project.panes ?? []).some((p) => p.media.url !== '')
+
+  const handleSaveNow = async () => {
+    setSaving(true)
+    const canvas = document.querySelector('[data-canvas-root] canvas') as HTMLCanvasElement | null
+    await saveCurrentProject(project, canvas)
+    setProjectIsSaved(true)
+    setSaving(false)
+  }
+
+  const handleNameChange = (name: string) => {
+    setProject({ ...project, name })
+  }
 
   useEffect(() => {
     setContentRef(contentRef.current)
     return () => setContentRef(null)
   }, [setContentRef])
 
-  // Auto-save: debounce 800ms on every project change
+  // Auto-save: debounce 800ms on every project change, only after first manual save
   useEffect(() => {
+    if (!projectIsSaved) return
     const timer = setTimeout(() => {
       const canvas = document.querySelector('[data-canvas-root] canvas') as HTMLCanvasElement | null
       saveCurrentProject(project, canvas)
     }, 800)
     return () => clearTimeout(timer)
-  }, [project])
+  }, [project, projectIsSaved])
+
+  // Warn before leaving when project has unsaved content
+  useEffect(() => {
+    if (!hasContent || projectIsSaved) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasContent, projectIsSaved])
 
   /** SCREENSHOT_PROTOTYPE: when ?screenshot=2.0.8, add keyframes so timeline shows keyframe lane */
   useEffect(() => {
@@ -320,6 +353,36 @@ export default function App() {
           >
             Projects
           </button>
+          <input
+            type="text"
+            value={project.name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+            className="text-xs bg-transparent text-white/70 hover:text-white focus:text-white focus:outline-none focus:ring-1 focus:ring-white/30 rounded px-1.5 py-0.5 w-36 truncate transition-colors"
+            placeholder="Untitled"
+            aria-label="Project name"
+          />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={handleSaveNow}
+              disabled={saving}
+              title={!projectIsSaved && hasContent ? 'Project has unsaved changes' : undefined}
+              className="text-xs text-white/50 hover:text-white/80 disabled:opacity-40 transition-colors"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {!projectIsSaved && hasContent && (
+              <span className="absolute -top-0.5 -right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse pointer-events-none" />
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={welcome.open}
+            className="text-xs text-white/50 hover:text-white/80 transition-colors"
+          >
+            Tutorial
+          </button>
           <button
             type="button"
             onClick={changelog.open}
@@ -351,20 +414,23 @@ export default function App() {
           ref={contentRef}
           className="flex-1 flex flex-col items-center justify-center gap-3 p-3 min-h-0 relative lg:gap-4 lg:p-4"
         >
-          <div
-            ref={previewRef}
-            data-canvas-root
-            className="relative rounded-lg overflow-hidden"
-            style={flyoverEditMode ? { pointerEvents: 'none' } : undefined}
-          >
-            <div className="relative" style={flyoverEditMode ? { pointerEvents: 'auto' } : undefined}>
-              <EditorCanvas />
-              <CanvasStaticTextOverlay />
+          <div className="flex items-center gap-3">
+            <div
+              ref={previewRef}
+              data-canvas-root
+              className="relative rounded-lg overflow-hidden"
+              style={flyoverEditMode ? { pointerEvents: 'none' } : undefined}
+            >
+              <div className="relative" style={flyoverEditMode ? { pointerEvents: 'auto' } : undefined}>
+                <EditorCanvas />
+                <CanvasStaticTextOverlay />
+              </div>
             </div>
+            <FovVerticalSlider />
           </div>
           <FloatingTransportBar />
         </main>
-        <aside className="w-56 lg:w-64 xl:w-72 border-l border-white/10 overflow-y-auto shrink-0 bg-zinc-900/30">
+        <aside className="w-72 lg:w-80 xl:w-96 border-l border-white/10 overflow-y-auto shrink-0 bg-zinc-900/30">
           <RightSidebar />
         </aside>
       </div>
@@ -376,6 +442,17 @@ export default function App() {
 }
 
 const KEYFRAME_SNAP_EPS = 0.008
+
+function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="relative group/tip">
+      {children}
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[11px] leading-none text-white bg-zinc-800 border border-white/10 rounded shadow-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity delay-300 duration-150 z-50">
+        {label}
+      </div>
+    </div>
+  )
+}
 
 function FloatingTransportBar() {
   const project = useStore((s) => s.project)
@@ -419,6 +496,11 @@ function FloatingTransportBar() {
 
   const jumpToSceneStart = () => {
     setCurrentTime(sceneStarts[currentSceneIndex] ?? 0)
+    setPlaying(false)
+  }
+
+  const jumpToSceneEnd = () => {
+    setCurrentTime((sceneStarts[currentSceneIndex] ?? 0) + (scene?.durationSeconds ?? 0))
     setPlaying(false)
   }
 
@@ -483,72 +565,87 @@ function FloatingTransportBar() {
       role="toolbar"
       aria-label="Playback and camera"
     >
-      <button
-        type="button"
-        onClick={() => setPlaying(!isPlaying)}
-        className={btnClass}
-        title={isPlaying ? 'Pause' : 'Play'}
-      >
-        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-      </button>
-      <button
-        type="button"
-        onClick={() => setLoopCurrentScene(!loopCurrentScene)}
-        className={`${btnClass} ${loopCurrentScene ? btnActiveClass : 'text-white/60'}`}
-        title={loopCurrentScene ? 'Loop current scene (on)' : 'Loop current scene (off)'}
-      >
-        <Repeat className="w-4 h-4" />
-      </button>
-      {hasMultipleScenes && (
+      <Tooltip label={isPlaying ? 'Pause' : 'Play'}>
         <button
           type="button"
-          onClick={jumpToNextScene}
-          disabled={!canGoNextScene}
+          onClick={() => setPlaying(!isPlaying)}
           className={btnClass}
-          title="Jump to next scene"
         >
-          <SkipForward className="w-4 h-4" />
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
+      </Tooltip>
+      <Tooltip label={loopCurrentScene ? 'Loop: on' : 'Loop: off'}>
+        <button
+          type="button"
+          onClick={() => setLoopCurrentScene(!loopCurrentScene)}
+          className={`${btnClass} ${loopCurrentScene ? btnActiveClass : 'text-white/60'}`}
+        >
+          <Repeat className="w-4 h-4" />
+        </button>
+      </Tooltip>
+      {hasMultipleScenes && (
+        <Tooltip label="Next scene">
+          <button
+            type="button"
+            onClick={jumpToNextScene}
+            disabled={!canGoNextScene}
+            className={btnClass}
+          >
+            <SkipForward className="w-4 h-4" />
+          </button>
+        </Tooltip>
       )}
-      <button
-        type="button"
-        onClick={jumpToSceneStart}
-        className={btnClass}
-        title="Jump to start of current scene"
-      >
-        <SkipBack className="w-4 h-4" />
-      </button>
+      <Tooltip label="Start of scene">
+        <button
+          type="button"
+          onClick={jumpToSceneStart}
+          className={btnClass}
+        >
+          <SkipBack className="w-4 h-4" />
+        </button>
+      </Tooltip>
+      <Tooltip label="End of scene">
+        <button
+          type="button"
+          onClick={jumpToSceneEnd}
+          className={btnClass}
+        >
+          <ChevronsRight className="w-4 h-4" />
+        </button>
+      </Tooltip>
 
       {scene?.flyover && (
         <>
           <div className="w-px h-6 bg-white/10" aria-hidden />
           {hasKeyframes && (
             <>
-              <button
-                type="button"
-                onClick={jumpToPrevKeyframe}
-                disabled={!canPrevKeyframe}
-                className={btnClass}
-                title="Previous camera keyframe"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={jumpToNextKeyframe}
-                disabled={!canNextKeyframe}
-                className={btnClass}
-                title="Next camera keyframe"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <Tooltip label="Prev keyframe">
+                <button
+                  type="button"
+                  onClick={jumpToPrevKeyframe}
+                  disabled={!canPrevKeyframe}
+                  className={btnClass}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </Tooltip>
+              <Tooltip label="Next keyframe">
+                <button
+                  type="button"
+                  onClick={jumpToNextKeyframe}
+                  disabled={!canNextKeyframe}
+                  className={btnClass}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </Tooltip>
             </>
           )}
+          <Tooltip label={flyoverEditMode ? 'Set camera keyframe at playhead' : 'Enable fly-around to add keyframes'}>
           <button
             type="button"
             onClick={handleSetKeyframe}
             disabled={!flyoverEditMode}
-            title={flyoverEditMode ? 'Set camera keyframe at playhead' : 'Enable fly-around to add keyframes'}
             className="flex items-center justify-center gap-2 rounded-md py-2 px-3 text-xs font-medium text-white/80 bg-white/10 hover:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
             <span
@@ -560,6 +657,7 @@ function FloatingTransportBar() {
             />
             Set keyframe
           </button>
+          </Tooltip>
         </>
       )}
 
@@ -633,6 +731,88 @@ function ResetProjectButton() {
     >
       Reset project
     </button>
+  )
+}
+
+function FovVerticalSlider() {
+  const project = useStore((s) => s.project)
+  const currentTime = useStore((s) => s.currentTime)
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
+  const setGlobalEffectTrack = useStore((s) => s.setGlobalEffectTrack)
+  const setGlobalEffectKeyframeAtTime = useStore((s) => s.setGlobalEffectKeyframeAtTime)
+  const setGlobalEffectParams = useStore((s) => s.setGlobalEffectParams)
+  const removeGlobalEffectKeyframe = useStore((s) => s.removeGlobalEffectKeyframe)
+
+  const scene = project.scenes[currentSceneIndex] ?? null
+  const sceneStartTime = project.scenes
+    .slice(0, currentSceneIndex)
+    .reduce((acc, s) => acc + s.durationSeconds, 0)
+  const sceneLocalTime = scene ? currentTime - sceneStartTime : 0
+  const sceneDuration = scene?.durationSeconds ?? 0
+
+  const track = project.globalEffects?.camera
+  const hasKeyframeTrack = Boolean(track && track.keyframes.length > 0)
+
+  const fromTrack = getGlobalEffectStateAtTime(project, 'camera', currentTime)
+  const fov = fromTrack
+    ? ((fromTrack.fov as number) ?? 50)
+    : scene
+    ? ((getSceneEffectStateAtTime(scene, 'camera', sceneLocalTime, sceneDuration)?.fov as number) ?? 50)
+    : 50
+
+  const SNAP_EPS = 0.05
+  const isOnKeyframe = Boolean(
+    track?.keyframes?.some(
+      (kf) => Math.abs(kf.time - currentTime) < SNAP_EPS && 'fov' in (kf as unknown as Record<string, unknown>)
+    )
+  )
+
+  const handleFovChange = (v: number) => {
+    if (hasKeyframeTrack) {
+      setGlobalEffectKeyframeAtTime('camera', currentTime, { fov: v } as Partial<GlobalEffectKeyframe>)
+    } else if (track) {
+      setGlobalEffectParams('camera', { ...(track.params ?? {}), fov: v })
+    } else {
+      setGlobalEffectTrack('camera', { enabled: true, keyframes: [], params: { fov: v } })
+    }
+  }
+
+  const handleKeyframe = () => {
+    if (isOnKeyframe) {
+      const idx = track!.keyframes.findIndex((kf) => Math.abs(kf.time - currentTime) < SNAP_EPS)
+      if (idx >= 0) removeGlobalEffectKeyframe('camera', idx)
+    } else {
+      setGlobalEffectKeyframeAtTime('camera', currentTime, { fov } as Partial<GlobalEffectKeyframe>)
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1.5 select-none">
+      <span className="text-[10px] font-mono text-white/50">{Math.round(fov)}°</span>
+      <input
+        type="range"
+        min={10}
+        max={120}
+        step={1}
+        value={fov}
+        onChange={(e) => handleFovChange(parseFloat(e.target.value))}
+        style={{ writingMode: 'vertical-lr', height: '150px', cursor: 'ns-resize' } as React.CSSProperties}
+      />
+      <button
+        type="button"
+        onClick={handleKeyframe}
+        className="w-6 h-6 rounded flex items-center justify-center hover:bg-white/10"
+        title={isOnKeyframe ? 'Remove FOV keyframe at playhead' : 'Set FOV keyframe at playhead'}
+      >
+        <svg viewBox="0 0 10 10" className="w-2.5 h-2.5">
+          {isOnKeyframe
+            ? <circle cx="5" cy="5" r="4.5" fill="#F6F572" />
+            : <circle cx="5" cy="5" r="3.5" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" />
+          }
+        </svg>
+      </button>
+      <span className="text-[10px] text-white/40">FOV</span>
+    </div>
   )
 }
 

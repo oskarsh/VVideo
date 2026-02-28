@@ -113,6 +113,8 @@ interface EditorState {
   setGlobalEffectKeyframeAtTime: (effectType: GlobalEffectType, time: number, patch: Partial<GlobalEffectKeyframe>) => void
   /** Update non-keyframe base params on an existing track (no history entry). Used for live slider preview. */
   setGlobalEffectParams: (effectType: GlobalEffectType, params: Record<string, unknown>) => void
+  projectIsSaved: boolean
+  setProjectIsSaved: (v: boolean) => void
   resetProject: () => void
   openProject: (project: Project) => void
   /** When trim editor is open: which video is being edited and time to show in main canvas. */
@@ -710,6 +712,8 @@ export const useStore = create<EditorState>((set) => ({
         },
       }
     }),
+  projectIsSaved: false,
+  setProjectIsSaved: (v) => set({ projectIsSaved: v }),
   resetProject: () =>
     set({
       project: getInitialProject(),
@@ -717,6 +721,7 @@ export const useStore = create<EditorState>((set) => ({
       currentTime: 0,
       historyPast: [],
       historyFuture: [],
+      projectIsSaved: false,
     }),
   openProject: (project) =>
     set({
@@ -726,6 +731,7 @@ export const useStore = create<EditorState>((set) => ({
       isPlaying: false,
       historyPast: [],
       historyFuture: [],
+      projectIsSaved: true,
     }),
   trimScrub: null,
   setTrimScrub: (value) => set({ trimScrub: value }),

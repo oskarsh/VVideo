@@ -292,6 +292,20 @@ export interface SceneEffectNoiseWarp {
   speedEnd: number
 }
 
+/** GPU pixel-sort approximation: rank-orders pixels by luminance within a sliding window. Keyframed start/end. */
+export interface SceneEffectPixelSort {
+  type: 'pixelSort'
+  enabled: boolean
+  /** Luminance cutoff — pixels below this are untouched. Keyframed start/end. */
+  thresholdStart: number
+  thresholdEnd: number
+  /** Half-width of the sort window in UV space (e.g. 0.15 = 15% of dimension). Keyframed start/end. */
+  spanStart: number
+  spanEnd: number
+  /** Sort direction. Not keyframed. */
+  axis: 'horizontal' | 'vertical'
+}
+
 export type SceneEffect =
   | SceneEffectZoom
   | SceneEffectGrain
@@ -313,6 +327,7 @@ export type SceneEffect =
   | SceneEffectPixelShatter
   | SceneEffectTunnel
   | SceneEffectNoiseWarp
+  | SceneEffectPixelSort
 
 /** Effect types that can be driven by global keyframes (timeline). */
 export type GlobalEffectType =
@@ -336,6 +351,7 @@ export type GlobalEffectType =
   | 'pixelShatter'
   | 'tunnel'
   | 'noiseWarp'
+  | 'pixelSort'
 
 /** One keyframe for a global effect: time in seconds (project timeline) + interpolatable params. */
 export interface GlobalEffectKeyframeGrain {
@@ -479,6 +495,12 @@ export interface GlobalEffectKeyframeNoiseWarp {
   scale: number
   speed: number
 }
+export interface GlobalEffectKeyframePixelSort {
+  time: number
+  enabled?: boolean
+  threshold: number
+  span: number
+}
 
 export type GlobalEffectKeyframe =
   | GlobalEffectKeyframeCamera
@@ -501,6 +523,7 @@ export type GlobalEffectKeyframe =
   | GlobalEffectKeyframePixelShatter
   | GlobalEffectKeyframeTunnel
   | GlobalEffectKeyframeNoiseWarp
+  | GlobalEffectKeyframePixelSort
 
 export interface GlobalEffectTrack {
   enabled: boolean
@@ -906,6 +929,15 @@ export function createDefaultScene(id: string): Scene {
         scaleEnd: 5.0,
         speedStart: 1.0,
         speedEnd: 1.0,
+      },
+      {
+        type: 'pixelSort',
+        enabled: false,
+        thresholdStart: 0.3,
+        thresholdEnd: 0.3,
+        spanStart: 0.15,
+        spanEnd: 0.15,
+        axis: 'horizontal',
       },
     ],
     texts: [],

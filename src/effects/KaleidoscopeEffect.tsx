@@ -8,14 +8,15 @@ const KaleidoscopeShader = {
     uniform float rotation;
     uniform float aspectRatio;
 
+    const float KALEIDO_PI = 3.14159265358979;
+
     void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
-      const float PI = 3.14159265358979;
       vec2 c = uv - 0.5;
       c.x *= aspectRatio;
       float r = length(c);
       float angle = atan(c.y, c.x) + rotation;
       float seg = max(segments, 2.0);
-      float segAngle = PI / seg;
+      float segAngle = KALEIDO_PI / seg;
       angle = mod(angle, 2.0 * segAngle);
       if (angle > segAngle) angle = 2.0 * segAngle - angle;
       vec2 warped;

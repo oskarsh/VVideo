@@ -53,7 +53,7 @@ export function PanelRow({
           disabled={toggleDisabled}
         >
           <span
-            className={`block h-3 w-3 rounded-full transition-all ${enabled ? 'translate-x-1 bg-emerald-400' : 'translate-x-0.5 bg-white/30'
+            className={`block h-3 w-3 rounded-full transition-all ${enabled ? 'translate-x-1 bg-emerald-400' : 'translate-x-[20px] bg-white/30'
               }`}
           />
         </button>
