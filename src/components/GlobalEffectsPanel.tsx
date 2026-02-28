@@ -15,13 +15,13 @@ export const GLOBAL_EFFECT_TYPES: GlobalEffectType[] = [
   'camera',
   'grain',
   'dither',
-  'dof',
   'handheld',
   'chromaticAberration',
   'lensDistortion',
   'glitch',
   'vignette',
   'scanline',
+  'dof',
 ]
 
 export const CAMERA_DISTORTION_TYPES: GlobalEffectType[] = [
