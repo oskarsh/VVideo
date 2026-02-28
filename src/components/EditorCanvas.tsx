@@ -945,7 +945,7 @@ function WASDFly() {
 const GAMEPAD_DEAD = 0.12
 const KEYFRAME_SNAP = 0.008
 
-function GamepadFly() {
+function GamepadFly({ orbitControlsRef }: { orbitControlsRef: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
   const prevXBtn = useRef(false)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
@@ -961,31 +961,47 @@ function GamepadFly() {
 
     const dt = Number.isFinite(delta) && delta > 0 && delta < 1 ? delta : 1 / 60
     const dead = (v: number) => (Math.abs(v) < GAMEPAD_DEAD ? 0 : v)
+    const controls = orbitControlsRef.current
 
-    // Analog movement: axis magnitude scales speed — slight push ≈ shift-slow, full push = full speed
     const lx = dead(gp.axes[0] ?? 0)
     const ly = dead(gp.axes[1] ?? 0)
-    if (lx !== 0 || ly !== 0) {
+    const rx = dead(gp.axes[2] ?? 0)
+    const ry = dead(gp.axes[3] ?? 0)
+    const trigDown = gp.buttons[6]?.value ?? 0
+    const trigUp = gp.buttons[7]?.value ?? 0
+
+    // Analog movement: axis magnitude scales speed — slight push = slow, full = full speed.
+    // Also mirror the delta onto controls.target so OrbitControls doesn't snap back.
+    const anyMove = lx !== 0 || ly !== 0 || trigDown > 0.05 || trigUp > 0.05
+    if (anyMove) {
+      // getWorldDirection triggers matrixWorld update → camera.matrix is also up-to-date
       camera.getWorldDirection(_forward)
       const m = camera.matrix.elements
       _right.set(m[0], m[1], m[2])
-      camera.position.addScaledVector(_forward, -ly * FLY_SPEED * dt)
-      camera.position.addScaledVector(_right, lx * FLY_SPEED * dt)
+      const fwdAmt = -ly * FLY_SPEED * dt
+      const rightAmt = lx * FLY_SPEED * dt
+      const upAmt = (trigUp - trigDown) * FLY_SPEED * dt
+      camera.position.addScaledVector(_forward, fwdAmt)
+      camera.position.addScaledVector(_right, rightAmt)
+      camera.position.y += upAmt
+      if (controls) {
+        controls.target.addScaledVector(_forward, fwdAmt)
+        controls.target.addScaledVector(_right, rightAmt)
+        controls.target.y += upAmt
+      }
     }
 
-    // L2/R2: analog ascend/descend
-    const trigDown = gp.buttons[6]?.value ?? 0
-    const trigUp = gp.buttons[7]?.value ?? 0
-    if (trigDown > 0.05 || trigUp > 0.05) {
-      camera.position.y += (trigUp - trigDown) * FLY_SPEED * dt
-    }
-
-    // Analog rotation: axis magnitude scales rotation speed
-    const rx = dead(gp.axes[2] ?? 0)
-    const ry = dead(gp.axes[3] ?? 0)
+    // Analog rotation: same as IJKL — change camera rotation then re-aim the orbit target
+    // so OrbitControls.update() next frame keeps the camera at the same position but new orientation.
     if (rx !== 0 || ry !== 0) {
       camera.rotation.y -= rx * ROTATE_SPEED * dt
       camera.rotation.x -= ry * ROTATE_SPEED * dt
+      if (controls) {
+        const dist = camera.position.distanceTo(controls.target)
+        // getWorldDirection triggers matrixWorld update reflecting the rotation just applied
+        camera.getWorldDirection(_forward)
+        controls.target.copy(camera.position).addScaledVector(_forward, dist)
+      }
     }
 
     // X button (index 0): set/update flyover keyframe at current playhead
@@ -1024,7 +1040,7 @@ function GamepadFly() {
   return null
 }
 
-/** R1 = jump to end of scene (if already at end + next scene exists → advance); L1 = jump to start. */
+/** R1 = jump to end of scene (if already at end → next scene or create one); L1 = jump to start. */
 function GamepadNav() {
   const project = useStore((s) => s.project)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
@@ -1032,6 +1048,7 @@ function GamepadNav() {
   const setCurrentTime = useStore((s) => s.setCurrentTime)
   const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
   const setPlaying = useStore((s) => s.setPlaying)
+  const addSceneAfter = useStore((s) => s.addSceneAfter)
   const prevL1 = useRef(false)
   const prevR1 = useRef(false)
 
@@ -1053,13 +1070,19 @@ function GamepadNav() {
     }
     prevL1.current = l1
 
-    // R1 (buttons[5]): jump to end; if already at end and a next scene exists, advance to it
+    // R1 (buttons[5]): jump to end; if already at end → advance to next scene or create one
     const r1 = gp.buttons[5]?.pressed ?? false
     if (r1 && !prevR1.current) {
       const atEnd = Math.abs(currentTime - sceneEnd) < 0.05
-      if (atEnd && currentSceneIndex < scenes.length - 1) {
-        setCurrentSceneIndex(currentSceneIndex + 1)
-        setCurrentTime(sceneEnd)
+      if (atEnd) {
+        if (currentSceneIndex < scenes.length - 1) {
+          setCurrentSceneIndex(currentSceneIndex + 1)
+          setCurrentTime(sceneEnd)
+        } else {
+          addSceneAfter(currentSceneIndex)
+          setCurrentSceneIndex(currentSceneIndex + 1)
+          setCurrentTime(sceneEnd)
+        }
       } else {
         setCurrentTime(sceneEnd)
       }
@@ -1429,7 +1452,7 @@ function SceneContent() {
       {editControlsActive && (
         <>
           <FlyoverEditSync />
-          <GamepadFly />
+          <GamepadFly orbitControlsRef={orbitControlsRef} />
           <WASDFly />
           <OrbitKeyboardSync controlsRef={orbitControlsRef} />
         </>
