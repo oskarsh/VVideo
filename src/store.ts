@@ -102,6 +102,8 @@ interface EditorState {
   updateFlyoverKeyframe: (sceneIndex: number, index: number, patch: Partial<FlyoverKeyframeWithTime>) => void
   flyoverEditMode: boolean
   setFlyoverEditMode: (v: boolean) => void
+  dofGuideVisible: boolean
+  setDofGuideVisible: (v: boolean) => void
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
   setProjectDither: (patch: Partial<SceneEffectDither>) => void
   /** Global effect tracks (keyframes on project timeline). */
@@ -572,6 +574,8 @@ export const useStore = create<EditorState>((set) => ({
     ),
   flyoverEditMode: true,
   setFlyoverEditMode: (v) => set({ flyoverEditMode: v, ...(v ? {} : { flyoverEditCamera: null }) }),
+  dofGuideVisible: false,
+  setDofGuideVisible: (v) => set({ dofGuideVisible: v }),
   setEffect: (sceneIndex, effectIndex, patch) =>
     set(
       withHistory((s) => ({

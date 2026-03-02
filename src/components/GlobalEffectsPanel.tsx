@@ -373,6 +373,8 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
   const removeGlobalEffectKeyframe = useStore((s) => s.removeGlobalEffectKeyframe)
   const setGlobalEffectKeyframeAtTime = useStore((s) => s.setGlobalEffectKeyframeAtTime)
   const setGlobalEffectParams = useStore((s) => s.setGlobalEffectParams)
+  const dofGuideVisible = useStore((s) => s.dofGuideVisible)
+  const setDofGuideVisible = useStore((s) => s.setDofGuideVisible)
 
   // Draft values per effect — held locally until the user clicks a keyframe button.
   // Once a keyframe is committed the draft is cleared and the store becomes the source of truth.
@@ -561,8 +563,14 @@ export function GlobalEffectsPanel({ singleEffectType }: { singleEffectType?: Gl
                 const d = displayState
                 return (
                   <div className="space-y-2">
-                    <SliderWithKeyframe label="Focus distance" paramKey="focusDistance" value={(d.focusDistanceStart ?? d.focusDistanceEnd ?? 0.015) as number} min={0} max={0.1} step={0.001} format={(x) => x.toFixed(3)} onChange={(v) => onSliderChange({ focusDistanceStart: v, focusDistanceEnd: v }, { focusDistance: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
-                    <SliderWithKeyframe label="Focus range" paramKey="focusRange" value={(d.focusRangeStart ?? d.focusRangeEnd ?? 0.5) as number} min={0.05} max={2} step={0.05} onChange={(v) => onSliderChange({ focusRangeStart: v, focusRangeEnd: v }, { focusRange: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <button
+                      onClick={() => setDofGuideVisible(!dofGuideVisible)}
+                      className={`w-full text-[11px] px-2 py-1 rounded transition-colors ${dofGuideVisible ? 'bg-blue-500/30 text-blue-300' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                    >
+                      {dofGuideVisible ? 'Hide focal plane guide' : 'Show focal plane guide'}
+                    </button>
+                    <SliderWithKeyframe label="Focus distance" paramKey="focusDistance" value={(d.focusDistanceStart ?? d.focusDistanceEnd ?? 0.015) as number} min={0} max={0.1} step={0.001} format={(x) => (x * 100).toFixed(1)} onChange={(v) => onSliderChange({ focusDistanceStart: v, focusDistanceEnd: v }, { focusDistance: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
+                    <SliderWithKeyframe label="Focus range" paramKey="focusRange" value={(d.focusRangeStart ?? d.focusRangeEnd ?? 0.5) as number} min={0.05} max={2} step={0.05} format={(x) => (x * 5).toFixed(1)} onChange={(v) => onSliderChange({ focusRangeStart: v, focusRangeEnd: v }, { focusRange: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                     <SliderWithKeyframe label="Bokeh scale" paramKey="bokehScale" value={(d.bokehScaleStart ?? d.bokehScaleEnd ?? 6) as number} min={0.5} max={15} step={0.5} onChange={(v) => onSliderChange({ bokehScaleStart: v, bokehScaleEnd: v }, { bokehScale: v })} onKeyframe={(p) => onKf(p)} {...kfProps} />
                   </div>
                 )

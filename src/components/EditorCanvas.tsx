@@ -947,7 +947,7 @@ const KEYFRAME_SNAP = 0.008
 
 function GamepadFly({ orbitControlsRef }: { orbitControlsRef: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
-  const prevXBtn = useRef(false)
+  const prevSquareBtn = useRef(false)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const project = useStore((s) => s.project)
   const currentTime = useStore((s) => s.currentTime)
@@ -1004,9 +1004,9 @@ function GamepadFly({ orbitControlsRef }: { orbitControlsRef: React.RefObject<Or
       }
     }
 
-    // X button (index 0): set/update flyover keyframe at current playhead
-    const xPressed = gp.buttons[0]?.pressed ?? false
-    if (xPressed && !prevXBtn.current) {
+    // Square button (index 2): set/update flyover keyframe at current playhead
+    const xPressed = gp.buttons[2]?.pressed ?? false
+    if (xPressed && !prevSquareBtn.current) {
       const cam = getFlyoverEditCamera()
       const scene = project.scenes[currentSceneIndex]
       if (cam && scene) {
@@ -1034,23 +1034,24 @@ function GamepadFly({ orbitControlsRef }: { orbitControlsRef: React.RefObject<Or
         }
       }
     }
-    prevXBtn.current = xPressed
+    prevSquareBtn.current = xPressed
   })
 
   return null
 }
 
-/** R1 = jump to end of scene (if already at end → next scene or create one); L1 = jump to start. */
+/** L1 = jump to start of current scene (if already at start → previous scene start); R1 = jump to end of current scene (if already at end → next scene end; if last scene → do nothing); X = play/pause. */
 function GamepadNav() {
   const project = useStore((s) => s.project)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const currentTime = useStore((s) => s.currentTime)
+  const isPlaying = useStore((s) => s.isPlaying)
   const setCurrentTime = useStore((s) => s.setCurrentTime)
   const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex)
   const setPlaying = useStore((s) => s.setPlaying)
-  const addSceneAfter = useStore((s) => s.addSceneAfter)
   const prevL1 = useRef(false)
   const prevR1 = useRef(false)
+  const prevX = useRef(false)
 
   useFrame(() => {
     const gp = Array.from(navigator.getGamepads()).find(Boolean)
@@ -1062,33 +1063,46 @@ function GamepadNav() {
     const sceneStart = scenes.slice(0, currentSceneIndex).reduce((a, s) => a + s.durationSeconds, 0)
     const sceneEnd = sceneStart + scene.durationSeconds
 
-    // L1 (buttons[4]): jump to start of current scene
+    // L1 (buttons[4]): jump to start of current scene; if already at start → previous scene start; first scene → do nothing
     const l1 = gp.buttons[4]?.pressed ?? false
     if (l1 && !prevL1.current) {
-      setCurrentTime(sceneStart)
-      setPlaying(false)
+      const atStart = Math.abs(currentTime - sceneStart) < 0.05
+      if (atStart && currentSceneIndex > 0) {
+        const prevIdx = currentSceneIndex - 1
+        const prevStart = scenes.slice(0, prevIdx).reduce((a, s) => a + s.durationSeconds, 0)
+        setCurrentSceneIndex(prevIdx)
+        setCurrentTime(prevStart)
+        setPlaying(false)
+      } else if (!atStart) {
+        setCurrentTime(sceneStart)
+        setPlaying(false)
+      }
+      // at start of first clip → do nothing
     }
     prevL1.current = l1
 
-    // R1 (buttons[5]): jump to end; if already at end → advance to next scene or create one
+    // R1 (buttons[5]): jump to end of current scene; if already at end → jump to end of next scene; if last scene → do nothing
     const r1 = gp.buttons[5]?.pressed ?? false
     if (r1 && !prevR1.current) {
       const atEnd = Math.abs(currentTime - sceneEnd) < 0.05
-      if (atEnd) {
-        if (currentSceneIndex < scenes.length - 1) {
-          setCurrentSceneIndex(currentSceneIndex + 1)
-          setCurrentTime(sceneEnd)
-        } else {
-          addSceneAfter(currentSceneIndex)
-          setCurrentSceneIndex(currentSceneIndex + 1)
-          setCurrentTime(sceneEnd)
-        }
-      } else {
+      if (atEnd && currentSceneIndex < scenes.length - 1) {
+        const nextIdx = currentSceneIndex + 1
+        const nextEnd = scenes.slice(0, nextIdx + 1).reduce((a, s) => a + s.durationSeconds, 0)
+        setCurrentSceneIndex(nextIdx)
+        setCurrentTime(nextEnd)
+      } else if (!atEnd) {
         setCurrentTime(sceneEnd)
       }
       setPlaying(false)
     }
     prevR1.current = r1
+
+    // X button (index 0): play/pause toggle
+    const x = gp.buttons[0]?.pressed ?? false
+    if (x && !prevX.current) {
+      setPlaying(!isPlaying)
+    }
+    prevX.current = x
   })
 
   return null
@@ -1133,6 +1147,51 @@ function useFormFocus(): boolean {
   return focused
 }
 
+function DoFFocalPlaneIndicator({ focusDistanceRaw, focusRangeRaw }: { focusDistanceRaw: number; focusRangeRaw: number }) {
+  const planeRef = useRef<THREE.Mesh>(null)
+  const nearRef = useRef<THREE.Mesh>(null)
+  const farRef = useRef<THREE.Mesh>(null)
+  const { camera } = useThree()
+
+  useFrame(() => {
+    const worldDist = focusDistanceRaw * 100
+    const halfRange = (focusRangeRaw * 5) / 2
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
+    if (planeRef.current) {
+      planeRef.current.position.copy(camera.position).addScaledVector(dir, worldDist)
+      planeRef.current.quaternion.copy(camera.quaternion)
+    }
+    if (nearRef.current) {
+      nearRef.current.position.copy(camera.position).addScaledVector(dir, Math.max(0, worldDist - halfRange))
+      nearRef.current.quaternion.copy(camera.quaternion)
+    }
+    if (farRef.current) {
+      farRef.current.position.copy(camera.position).addScaledVector(dir, worldDist + halfRange)
+      farRef.current.quaternion.copy(camera.quaternion)
+    }
+  })
+
+  return (
+    <>
+      {/* Focus range near edge */}
+      <mesh ref={nearRef}>
+        <planeGeometry args={[200, 200]} />
+        <meshBasicMaterial color="#22aaff" transparent opacity={0.04} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      {/* Focal plane */}
+      <mesh ref={planeRef}>
+        <planeGeometry args={[200, 200]} />
+        <meshBasicMaterial color="#44ccff" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      {/* Focus range far edge */}
+      <mesh ref={farRef}>
+        <planeGeometry args={[200, 200]} />
+        <meshBasicMaterial color="#22aaff" transparent opacity={0.04} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+    </>
+  )
+}
+
 function SceneContent() {
   const project = useStore((s) => s.project)
   const currentSceneIndex = useStore((s) => s.currentSceneIndex)
@@ -1140,6 +1199,7 @@ function SceneContent() {
   const flyoverEditMode = useStore((s) => s.flyoverEditMode)
   const isPlaying = useStore((s) => s.isPlaying)
   const isExporting = useStore((s) => s.isExporting)
+  const dofGuideVisible = useStore((s) => s.dofGuideVisible)
   const exportRenderMode = useStore((s) => s.exportRenderMode)
   const trimScrub = useStore((s) => s.trimScrub)
   const orbitControlsRef = useRef<OrbitControlsImpl | null>(null)
@@ -1543,6 +1603,9 @@ function SceneContent() {
       {(scene.texts ?? []).filter((t) => t.mode === '3d').map((t) => (
         <TextPlane3D key={t.id} text={t} />
       ))}
+      {dofGuideVisible && dofEnabled && !isPlaying && !isExporting && (
+        <DoFFocalPlaneIndicator focusDistanceRaw={dofFocusDistance} focusRangeRaw={dofFocusRange} />
+      )}
       <ProfiledSection id="effects">
       <EffectComposer>
         {dofEnabled ? (

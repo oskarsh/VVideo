@@ -425,6 +425,8 @@ function DoFControls({
   setEffect: (sceneIndex: number, effectIndex: number, patch: object) => void
   sidebarMode?: boolean
 }) {
+  const dofGuideVisible = useStore((s) => s.dofGuideVisible)
+  const setDofGuideVisible = useStore((s) => s.setDofGuideVisible)
   const d = eff as DoFLegacy
   const fdS = d.focusDistanceStart ?? d.focusDistance ?? 0.015
   const fdE = d.focusDistanceEnd ?? d.focusDistance ?? 0.015
@@ -434,6 +436,12 @@ function DoFControls({
   const bE = d.bokehScaleEnd ?? d.bokehScale ?? 6
   return (
     <div className="space-y-3">
+      <button
+        onClick={() => setDofGuideVisible(!dofGuideVisible)}
+        className={`w-full text-[11px] px-2 py-1 rounded transition-colors ${dofGuideVisible ? 'bg-blue-500/30 text-blue-300' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+      >
+        {dofGuideVisible ? 'Hide focal plane guide' : 'Show focal plane guide'}
+      </button>
       <div className="space-y-3">
         <KeyframeSlider
           label="Focus distance"
@@ -442,7 +450,7 @@ function DoFControls({
           min={0}
           max={0.1}
           step={0.001}
-          format={(v) => v.toFixed(3)}
+          format={(v) => (v * 100).toFixed(1)}
           onStart={(v) => setEffect(sceneIndex, effectIndex, { focusDistanceStart: v })}
           onEnd={(v) => setEffect(sceneIndex, effectIndex, { focusDistanceEnd: v })}
         />
@@ -453,7 +461,7 @@ function DoFControls({
           min={0.05}
           max={2}
           step={0.05}
-          format={(v) => v.toFixed(2)}
+          format={(v) => (v * 5).toFixed(1)}
           onStart={(v) => setEffect(sceneIndex, effectIndex, { focusRangeStart: v })}
           onEnd={(v) => setEffect(sceneIndex, effectIndex, { focusRangeEnd: v })}
         />
