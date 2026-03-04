@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Play, Pause, Repeat, SkipForward, SkipBack, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react'
+import { Play, Pause, Repeat, SkipForward, SkipBack, ChevronLeft, ChevronRight, ChevronsRight, RotateCcw } from 'lucide-react'
 import { useStore } from '@/store'
 import { DEFAULT_GLOBAL_KEYFRAMES, getGlobalEffectStateAtTime } from '@/lib/globalEffects'
 import type { GlobalEffectKeyframeDither, GlobalEffectKeyframe } from '@/types'
@@ -24,6 +24,7 @@ import { PresetDropdown } from '@/components/PresetDropdown'
 import { StaticTextOverlay } from '@/components/StaticTextOverlay'
 import { getPlaneMedia, getPanesForRender } from '@/types'
 import { getFlyoverEditCamera } from '@/flyoverCameraRef'
+import { triggerCameraReset } from '@/cameraResetRef'
 import { getFlyoverKeyframes } from '@/lib/flyover'
 import { FRAME_BY_FRAME_RESOLUTION_THRESHOLD, type ExportFormat } from '@/constants/export'
 import { isWebCodecsSupported, WebCodecsRecorder } from '@/lib/exportWebCodecs'
@@ -469,6 +470,7 @@ function FloatingTransportBar() {
   const addFlyoverKeyframe = useStore((s) => s.addFlyoverKeyframe)
   const updateFlyoverKeyframe = useStore((s) => s.updateFlyoverKeyframe)
   const setSelectedCameraKeyframe = useStore((s) => s.setSelectedCameraKeyframe)
+  const setFlyoverJumpTo = useStore((s) => s.setFlyoverJumpTo)
   const scene = project.scenes[currentSceneIndex]
   const sceneStarts = project.scenes.reduce<number[]>(
     (acc, s, i) => [...acc, (acc[i] ?? 0) + s.durationSeconds],
@@ -518,6 +520,7 @@ function FloatingTransportBar() {
     setCurrentSceneIndex(currentSceneIndex)
     setPlaying(false)
     setSelectedCameraKeyframe({ sceneIndex: currentSceneIndex, time: projectTime })
+    setFlyoverJumpTo({ sceneIndex: currentSceneIndex, normalizedTime: prev.time })
   }
 
   const jumpToNextKeyframe = () => {
@@ -529,6 +532,7 @@ function FloatingTransportBar() {
     setCurrentSceneIndex(currentSceneIndex)
     setPlaying(false)
     setSelectedCameraKeyframe({ sceneIndex: currentSceneIndex, time: projectTime })
+    setFlyoverJumpTo({ sceneIndex: currentSceneIndex, normalizedTime: next.time })
   }
 
   const handleSetKeyframe = () => {
@@ -661,7 +665,19 @@ function FloatingTransportBar() {
         </>
       )}
 
-      <div className="flex items-center gap-2 text-white/50 ml-auto" title="Camera position (x, y, z)">
+      <div className="w-px h-6 bg-white/10 ml-auto" aria-hidden />
+      <Tooltip label="Reset camera">
+        <button
+          type="button"
+          onClick={triggerCameraReset}
+          className={btnClass}
+          title="Reset camera to initial position"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </button>
+      </Tooltip>
+
+      <div className="flex items-center gap-2 text-white/50" title="Camera position (x, y, z)">
         <svg
           className="h-4 w-4 shrink-0 opacity-70"
           fill="none"

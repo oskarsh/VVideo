@@ -16,6 +16,16 @@ export const CHANGELOG_STORAGE_KEY = 'vvideo-changelog-seen'
 
 export const changelogReleases: ChangelogRelease[] = [
   {
+    version: '2.0.15',
+    date: '2026-03-05',
+    summary: 'Camera snaps to keyframe when clicked.',
+    items: [
+      'Click a camera keyframe in the timeline: the camera jumps to that keyframe’s position, rotation, and FOV.',
+      'Prev/next keyframe buttons in the transport bar now also snap the camera to the selected keyframe.',
+      'The camera shows exactly what that keyframe would show during playback.',
+    ],
+  },
+  {
     version: '2.0.14',
     date: '2026-02-28',
     summary: 'Per-parameter keyframe lanes and keyframe bug fix.',

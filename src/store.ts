@@ -138,9 +138,9 @@ interface EditorState {
   /** Current camera in flyover edit mode; used to show if Start/End buttons are "at" keyframe. */
   flyoverEditCamera: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null
   setFlyoverEditCamera: (v: { position: [number, number, number]; rotation: [number, number, number]; fov: number } | null) => void
-  /** When true, canvas snaps camera to start keyframe once then clears. */
-  flyoverJumpToStart: boolean
-  setFlyoverJumpToStart: (v: boolean) => void
+  /** When set, canvas snaps camera to this keyframe (position/rotation/fov) once then clears. */
+  flyoverJumpTo: { sceneIndex: number; normalizedTime: number } | null
+  setFlyoverJumpTo: (v: { sceneIndex: number; normalizedTime: number } | null) => void
   /** Selected camera keyframe (highlighted in timeline); set when jumping via transport bar or clicking marker. */
   selectedCameraKeyframe: { sceneIndex: number; time: number } | null
   setSelectedCameraKeyframe: (v: { sceneIndex: number; time: number } | null) => void
@@ -743,8 +743,8 @@ export const useStore = create<EditorState>((set) => ({
   setTrimEditorOpen: (v) => set({ trimEditorOpen: v }),
   flyoverEditCamera: null,
   setFlyoverEditCamera: (v) => set({ flyoverEditCamera: v }),
-  flyoverJumpToStart: false,
-  setFlyoverJumpToStart: (v) => set({ flyoverJumpToStart: v }),
+  flyoverJumpTo: null,
+  setFlyoverJumpTo: (v) => set({ flyoverJumpTo: v }),
   selectedCameraKeyframe: null,
   setSelectedCameraKeyframe: (v) => set({ selectedCameraKeyframe: v }),
   timelineShowAutomation: false,

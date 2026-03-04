@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, Suspense, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { registerCameraReset } from '@/cameraResetRef'
 import { OrbitControls } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import {
@@ -18,7 +19,7 @@ import { setFlyoverEditCamera, getFlyoverEditCamera } from '@/flyoverCameraRef'
 import { getFlyKeys, setFlyKey, isFlyKey } from '@/flyKeys'
 import { useGamepad } from '@/useGamepad'
 import { applyFlyoverEasing } from '@/easing'
-import { getFlyoverKeyframes } from '@/lib/flyover'
+import { getFlyoverKeyframes, getFlyoverStateAt } from '@/lib/flyover'
 import { DitherEffect } from '@/effects/DitherEffect'
 import { LensDistortion } from '@/effects/LensDistortionEffect'
 import { BlockGlitchEffect } from '@/effects/BlockGlitchEffect'
@@ -725,39 +726,59 @@ function CameraRig({
 
 const CAMERA_EPS = 1e-4
 const FOV_EPS = 0.5
+const _snapDir = new THREE.Vector3()
 
-function FlyoverEditSync() {
+function FlyoverEditSync({ orbitControlsRef }: { orbitControlsRef: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
-  const scene = useStore((s) => s.project.scenes[s.currentSceneIndex])
+  const project = useStore((s) => s.project)
+  const currentSceneIndex = useStore((s) => s.currentSceneIndex)
   const setStoreCamera = useStore((s) => s.setFlyoverEditCamera)
-  const jumpToStart = useStore((s) => s.flyoverJumpToStart)
-  const setJumpToStart = useStore((s) => s.setFlyoverJumpToStart)
+  const flyoverJumpTo = useStore((s) => s.flyoverJumpTo)
+  const setFlyoverJumpTo = useStore((s) => s.setFlyoverJumpTo)
   const justEnabled = useRef(true)
   const lastStored = useRef<{ position: [number, number, number]; rotation: [number, number, number]; fov: number } | null>(null)
 
   useFrame(() => {
     if (!camera || !('fov' in camera)) return
+    const scene = project.scenes[currentSceneIndex]
     const keyframes = getFlyoverKeyframes(scene)
     const firstKf = keyframes[0]
-    if (jumpToStart && firstKf?.position && firstKf?.rotation) {
-      const [x, y, z] = firstKf.position
-      const [rx, ry, rz] = firstKf.rotation
-      if (Number.isFinite(x + y + z + rx + ry + rz)) {
-        camera.position.set(x, y, z)
-        camera.rotation.set(rx, ry, rz)
-        camera.fov = firstKf.fov != null && Number.isFinite(firstKf.fov) ? firstKf.fov : 50
+
+    // Snap camera to a specific keyframe when requested (e.g. from timeline click or prev/next)
+    if (flyoverJumpTo) {
+      const targetScene = project.scenes[flyoverJumpTo.sceneIndex]
+      const state = getFlyoverStateAt(targetScene, flyoverJumpTo.normalizedTime)
+      if (state && state.position.every(Number.isFinite) && state.rotation.every(Number.isFinite)) {
+        const zoomEffect = targetScene?.effects.find((e): e is SceneEffectZoom => e.type === 'zoom')
+        const zoomStart = zoomEffect?.startScale ?? 1
+        const zoomEnd = zoomEffect?.endScale ?? 1
+        const zoom = zoomStart + (zoomEnd - zoomStart) * flyoverJumpTo.normalizedTime
+        camera.position.set(
+          state.position[0] * zoom,
+          state.position[1] * zoom,
+          state.position[2] * zoom
+        )
+        camera.rotation.set(state.rotation[0], state.rotation[1], state.rotation[2])
+        camera.fov = state.fov
         camera.updateProjectionMatrix()
-        const state = {
-          position: [x, y, z] as [number, number, number],
-          rotation: [rx, ry, rz] as [number, number, number],
+        // Sync OrbitControls target so it doesn't overwrite our snap on the next frame
+        const controls = orbitControlsRef?.current
+        if (controls?.target) {
+          camera.getWorldDirection(_snapDir)
+          const dist = Math.max(1, camera.position.distanceTo(controls.target))
+          controls.target.copy(camera.position).add(_snapDir.multiplyScalar(dist))
+        }
+        const camState = {
+          position: [camera.position.x, camera.position.y, camera.position.z] as [number, number, number],
+          rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z] as [number, number, number],
           fov: camera.fov,
         }
-        setFlyoverEditCamera(state)
-        lastStored.current = state
-        setStoreCamera(state)
+        lastStored.current = camState
+        setStoreCamera(camState)
       }
-      setJumpToStart(false)
+      setFlyoverJumpTo(null)
     }
+
     if (justEnabled.current && firstKf?.position && firstKf?.rotation) {
       try {
         const [x, y, z] = firstKf.position
@@ -791,6 +812,26 @@ function FlyoverEditSync() {
       setStoreCamera({ position: pos, rotation: rot, fov })
     }
   })
+  return null
+}
+
+function CameraResetSync({ orbitControlsRef }: { orbitControlsRef: React.RefObject<OrbitControlsImpl | null> }) {
+  const { camera } = useThree()
+  useEffect(() => {
+    registerCameraReset(() => {
+      camera.position.set(0, 0, 2)
+      camera.rotation.set(0, 0, 0)
+      if ('fov' in camera) {
+        ;(camera as import('three').PerspectiveCamera).fov = FOV_DEG
+        camera.updateProjectionMatrix()
+      }
+      const controls = orbitControlsRef.current
+      if (controls) {
+        controls.target.set(0, 0, 0)
+        controls.update()
+      }
+    })
+  }, [camera, orbitControlsRef])
   return null
 }
 
@@ -1509,9 +1550,10 @@ function SceneContent() {
         maxDistance={20}
         target={[0, 0, 0]}
       />
+      <CameraResetSync orbitControlsRef={orbitControlsRef} />
       {editControlsActive && (
         <>
-          <FlyoverEditSync />
+          <FlyoverEditSync orbitControlsRef={orbitControlsRef} />
           <GamepadFly orbitControlsRef={orbitControlsRef} />
           <WASDFly />
           <OrbitKeyboardSync controlsRef={orbitControlsRef} />

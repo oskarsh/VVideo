@@ -279,6 +279,8 @@ export function Timeline() {
   const removeFlyoverKeyframe = useStore((s) => s.removeFlyoverKeyframe)
   const selectedCameraKeyframe = useStore((s) => s.selectedCameraKeyframe)
   const setSelectedCameraKeyframe = useStore((s) => s.setSelectedCameraKeyframe)
+  const setFlyoverJumpTo = useStore((s) => s.setFlyoverJumpTo)
+  const flyoverEditMode = useStore((s) => s.flyoverEditMode)
 
   const [automationDrag, setAutomationDrag] = useState<{
     curve: AutomationCurve
@@ -327,9 +329,21 @@ export function Timeline() {
         const end = sceneStarts[i + 1] ?? totalDuration
         return t >= start && t < end
       })
-      if (idx >= 0) setCurrentSceneIndex(idx)
+      if (idx >= 0) {
+        setCurrentSceneIndex(idx)
+        if (flyoverEditMode) {
+          const targetScene = project.scenes[idx]
+          const keyframes = getFlyoverKeyframes(targetScene)
+          if (keyframes.length >= 1) {
+            const sceneStart = sceneStarts[idx] ?? 0
+            const duration = targetScene?.durationSeconds ?? 1
+            const normalizedTime = duration > 0 ? Math.max(0, Math.min(1, (t - sceneStart) / duration)) : 0
+            setFlyoverJumpTo({ sceneIndex: idx, normalizedTime })
+          }
+        }
+      }
     },
-    [totalDuration, sceneStarts, setCurrentTime, setCurrentSceneIndex, setSelectedCameraKeyframe]
+    [project, flyoverEditMode, totalDuration, sceneStarts, setCurrentTime, setCurrentSceneIndex, setSelectedCameraKeyframe, setFlyoverJumpTo]
   )
 
   const rulerTicks = getRulerTicks(totalDuration)
@@ -918,6 +932,13 @@ export function Timeline() {
                         removeFlyoverKeyframe(sceneIndex, kfIndex)
                         if (isSelected) setSelectedCameraKeyframe(null)
                       }
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setCurrentTime(projectTime)
+                      setCurrentSceneIndex(sceneIndex)
+                      setSelectedCameraKeyframe({ sceneIndex, time: projectTime })
+                      setFlyoverJumpTo({ sceneIndex, normalizedTime })
                     }}
                     title={`Camera @ ${formatTime(projectTime)} — click to select & seek, drag to move, double-click to remove`}
                   />

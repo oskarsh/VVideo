@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.15 — 2026-03-05
+
+**Camera snaps to keyframe when clicked.**
+
+- Click a camera keyframe in the timeline: the camera jumps to that keyframe's position, rotation, and FOV.
+- Prev/next keyframe buttons in the transport bar now also snap the camera to the selected keyframe.
+- Scrubbing the timeline (clicking on ruler or track) updates the camera to show the interpolated position at that time.
+- The camera shows exactly what that moment would show during playback.
+
+---
+
 ## 2.0.14 — 2026-02-28
 
 **Per-parameter keyframe lanes and keyframe bug fix.**
